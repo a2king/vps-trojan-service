@@ -22,7 +22,6 @@ DEFAULT_CLASH_SETTINGS: dict = {
         {"name": "Final", "type": "select", "proxies": ["DIRECT", "PROXY"]},
     ],
     "cfw_bypass": [
-        "caoyugangsg.top",
         "music.163.com",
         "music.126.net",
         "localhost",
@@ -122,8 +121,6 @@ DOMAIN-KEYWORD,1password.com,DIRECT
 DOMAIN-KEYWORD,1passwordservice.com,DIRECT
 DOMAIN-KEYWORD,embyvip,DIRECT
 DOMAIN-KEYWORD,emby,DIRECT
-DOMAIN-SUFFIX,hsjdata.com,DIRECT
-DOMAIN-SUFFIX,youshu.com.cn,DIRECT
 DOMAIN-SUFFIX,hdslb.com,PROXY
 DOMAIN-SUFFIX,notion.so,PROXY
 DOMAIN-SUFFIX,services.googleapis.cn,PROXY
