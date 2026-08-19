@@ -27,6 +27,8 @@ def _split_ip(endpoint: str) -> str:
 
 
 def _parse_log_time(raw: str) -> datetime:
+    # trojan 日志是本地墙钟（由系统时区或 systemd Environment=TZ 决定）。
+    # 安装脚本会把两者都设成 Asia/Shanghai，因此按配置时区解读，不再做偏移换算。
     parsed = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
     return parsed.replace(tzinfo=TZ).replace(tzinfo=None)
 

@@ -215,11 +215,33 @@ EOF
   fi
 }
 
+setup_timezone() {
+  green "设置系统时区为 Asia/Shanghai…"
+  if command -v timedatectl >/dev/null 2>&1; then
+    timedatectl set-timezone Asia/Shanghai
+  elif [[ -e /usr/share/zoneinfo/Asia/Shanghai ]]; then
+    ln -sfn /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+    echo Asia/Shanghai > /etc/timezone 2>/dev/null || true
+  else
+    red "未找到时区数据，跳过 timedatectl"
+    return 0
+  fi
+  if [[ -f /etc/sysconfig/clock ]]; then
+    if grep -q '^ZONE=' /etc/sysconfig/clock; then
+      sed -i 's|^ZONE=.*|ZONE="Asia/Shanghai"|' /etc/sysconfig/clock
+    else
+      echo 'ZONE="Asia/Shanghai"' >> /etc/sysconfig/clock
+    fi
+  fi
+  green "当前时间：$(date '+%Y-%m-%d %H:%M:%S %z') ($(timedatectl show -p Timezone --value 2>/dev/null || echo Asia/Shanghai))"
+}
+
 optimize_network() {
   require_root
   detect_os
   enable_bbr
   setup_public_dns
+  setup_timezone
   green "网络优化完成"
 }
 
@@ -462,6 +484,7 @@ redeploy() {
   export PATH="/root/.local/bin:${HOME}/.local/bin:${PATH}"
 
   green "更新并重启（前端打包 + nginx 配置 + 后端 + nginx）"
+  setup_timezone
   install_node
   install_uv
   setup_backend
@@ -471,9 +494,23 @@ redeploy() {
   green "更新 nginx 配置…"
   write_nginx "${INSTALL_DIR}/deploy/nginx.conf.tpl"
 
+  if [[ -f /etc/systemd/system/trojan.service ]]; then
+    green "更新 Trojan 服务（固定日志时区 Asia/Shanghai）…"
+    install -m 644 "${INSTALL_DIR}/deploy/trojan.service" /etc/systemd/system/trojan.service
+  fi
+  if [[ -f /etc/systemd/system/trojan-admin.service ]]; then
+    render "${INSTALL_DIR}/deploy/trojan-admin.service.tpl" /etc/systemd/system/trojan-admin.service
+  fi
+  systemctl daemon-reload
+
   green "重启管理后端…"
   systemctl restart trojan-admin
   wait_for_admin
+
+  if [[ -f /etc/systemd/system/trojan.service ]]; then
+    green "重启 Trojan…"
+    systemctl restart trojan
+  fi
 
   green "重启 nginx…"
   systemctl restart nginx
@@ -490,6 +527,7 @@ install_all() {
   detect_os
   enable_bbr
   setup_public_dns
+  setup_timezone
   ask_inputs
   check_ports
   check_dns
@@ -568,7 +606,7 @@ menu() {
   echo " 2. 卸载"
   echo " 3. 修复证书"
   echo " 4. 更新并重启（前端 + nginx 配置 + 后端）"
-  echo " 5. 开启 BBR 并切换公共 DNS"
+  echo " 5. 开启 BBR、公共 DNS 与上海时区"
   echo " 0. 退出"
   echo
   read -r -p "请输入数字: " num
