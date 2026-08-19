@@ -68,6 +68,56 @@ class Overview(BaseModel):
     month_upload: int
 
 
+class CpuInfo(BaseModel):
+    percent: float
+    per_core: list[float]
+    model: str
+    cores_physical: int | None
+    cores_logical: int
+    load_1: float | None
+    load_5: float | None
+    load_15: float | None
+
+
+class MemoryInfo(BaseModel):
+    total: int
+    used: int
+    available: int
+    free: int
+    cached: int
+    buffers: int
+    percent: float
+    swap_total: int
+    swap_used: int
+    swap_percent: float
+
+
+class DiskInfo(BaseModel):
+    device: str
+    mountpoint: str
+    fstype: str
+    total: int
+    used: int
+    free: int
+    percent: float
+
+
+class SystemOut(BaseModel):
+    hostname: str
+    os_name: str
+    kernel: str
+    arch: str
+    timezone: str
+    boot_time: str | None
+    uptime_seconds: int
+    collected_at: str | None
+    process_count: int
+    ips: list[str]
+    cpu: CpuInfo
+    memory: MemoryInfo
+    disks: list[DiskInfo]
+
+
 class ClashRuleOut(BaseModel):
     id: int
     line: str

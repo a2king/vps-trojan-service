@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.models import Account, AccountIp, Admin, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser  # noqa: F401
 from app.mysql_bridge import create_mysql_server
-from app.routers import auth, clash, subscribe, users
+from app.routers import auth, clash, subscribe, system, users
 from app.security import hash_admin_password
 from app.services.clash import seed_clash
 from app.services.traffic import collect_once
@@ -84,6 +84,7 @@ app.add_middleware(
 )
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(system.router)
 app.include_router(clash.router)
 app.include_router(subscribe.router)
 

@@ -38,6 +38,15 @@ export function formatDateTime(iso: string): string {
   })
 }
 
+export function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days} 天 ${hours} 小时 ${minutes} 分钟`
+  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`
+  return `${Math.max(0, minutes)} 分钟`
+}
+
 export async function copyText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text)
 }

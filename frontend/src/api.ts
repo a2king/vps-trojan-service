@@ -43,6 +43,56 @@ export type ClashRule = {
   sort_order: number
 }
 
+export type SystemCpu = {
+  percent: number
+  per_core: number[]
+  model: string
+  cores_physical: number | null
+  cores_logical: number
+  load_1: number | null
+  load_5: number | null
+  load_15: number | null
+}
+
+export type SystemMemory = {
+  total: number
+  used: number
+  available: number
+  free: number
+  cached: number
+  buffers: number
+  percent: number
+  swap_total: number
+  swap_used: number
+  swap_percent: number
+}
+
+export type SystemDisk = {
+  device: string
+  mountpoint: string
+  fstype: string
+  total: number
+  used: number
+  free: number
+  percent: number
+}
+
+export type SystemInfo = {
+  hostname: string
+  os_name: string
+  kernel: string
+  arch: string
+  timezone: string
+  boot_time: string | null
+  uptime_seconds: number
+  collected_at: string | null
+  process_count: number
+  ips: string[]
+  cpu: SystemCpu
+  memory: SystemMemory
+  disks: SystemDisk[]
+}
+
 export type ClashSettings = {
   node_name?: string
   mixed_port?: number
@@ -113,6 +163,7 @@ export const api = {
     }),
   me: () => request<{ username: string; domain: string }>('/api/auth/me'),
   overview: () => request<Overview>('/api/overview'),
+  system: () => request<SystemInfo>('/api/system'),
   users: () => request<User[]>('/api/users'),
   createUser: (payload: { name: string; password?: string; remark?: string }) =>
     request<User>('/api/users', { method: 'POST', body: JSON.stringify(payload) }),

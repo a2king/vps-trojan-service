@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AdminLayout } from './components/AdminLayout'
 import { HomePage } from './pages/Home'
 import { AdminPage } from './pages/Admin'
+import { DashboardPage } from './pages/Dashboard'
 import { LoginPage } from './pages/Login'
 import { RulesPage } from './pages/Rules'
 
@@ -12,7 +13,8 @@ export function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/admin/login" element={<LoginPage />} />
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminPage />} />
+          <Route index element={<DashboardPage />} />
+          <Route path="users" element={<AdminPage />} />
           <Route path="rules" element={<RulesPage />} />
         </Route>
         <Route path="/admin/*" element={<Navigate to="/admin" replace />} />
