@@ -1,0 +1,4 @@
+# Git commit messages
+
+Generate Commit Message 必须使用简体中文。
+只写 1–2 句，说明这次改动的原因，不要用英文，不要 Conventional Commits 前缀。
