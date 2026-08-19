@@ -20,12 +20,11 @@ def clash_subscribe(password: str, db: Session = Depends(get_db)) -> PlainTextRe
     if account is None or not account.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="配置不存在")
     body = render_clash_yaml(account, db)
-    filename = f"{account.name}.yaml"
+    raw_name = "".join(ch for ch in account.name if ch.isalnum() or ch in "-_.") or "clash"
+    filename = f"{raw_name}.yaml"
     headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Disposition": f"attachment; filename={filename}",
         "Profile-Update-Interval": "24",
-        "Subscription-Userinfo": (
-            f"upload=0; download=0; total=0; expire=0"
-        ),
+        "Subscription-Userinfo": "upload=0; download=0; total=0; expire=0",
     }
     return PlainTextResponse(content=body, media_type="text/yaml; charset=utf-8", headers=headers)
