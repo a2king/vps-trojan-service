@@ -1,0 +1,34 @@
+:root {
+  --ink: #1a1714;
+  --paper: #f3eee6;
+  --paper-deep: #e7dfd2;
+  --muted: #6f675c;
+  --line: #d8cfc0;
+  --gold: #b5812d;
+  --forest: #3d5a45;
+  --admin-bg: #111110;
+  --admin-panel: #191816;
+  --admin-panel-2: #201e1b;
+  --admin-line: #2f2c27;
+  --admin-text: #e8e4dc;
+  --admin-muted: #9a9488;
+  --admin-gold: #d4a054;
+  --admin-green: #7ea37a;
+  --admin-red: #c96b56;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --sans: 'IBM Plex Sans', 'Outfit', sans-serif;
+  --display: 'Fraunces', 'Times New Roman', serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: 'Outfit', 'IBM Plex Sans', sans-serif;
+}
+button, input, textarea, select { font: inherit; }
+a { color: inherit; }
+button { cursor: pointer; }
+code, .mono { font-family: var(--mono); }

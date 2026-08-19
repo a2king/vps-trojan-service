@@ -1,0 +1,20 @@
+[project]
+name = "trojan-admin"
+version = "0.1.0"
+description = "Trojan 多用户管理后端"
+requires-python = ">=3.11"
+dependencies = [
+    "apscheduler>=3.10",
+    "bcrypt>=4.2",
+    "cryptography>=43",
+    "fastapi>=0.115",
+    "pydantic-settings>=2.6",
+    "python-dotenv>=1.0",
+    "pyjwt>=2.9",
+    "sqlalchemy>=2.0",
+    "uvicorn[standard]>=0.32",
+    "mysql-mimic>=3.0.4",
+]
+
+[tool.uv]
+package = false
