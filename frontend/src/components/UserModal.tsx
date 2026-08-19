@@ -96,8 +96,8 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
       <div className="modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <h3>{current.name}</h3>
-          <button className="btn ghost" type="button" onClick={onClose}>
-            关闭
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="关闭">
+            ×
           </button>
         </div>
         <div className="modal-body">
@@ -183,16 +183,16 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData} barGap={2}>
-                <CartesianGrid stroke="#2f2c27" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: '#9a9488', fontSize: 11 }} />
-                <YAxis tickFormatter={(v: number) => formatBytes(v)} tick={{ fill: '#9a9488', fontSize: 11 }} width={72} />
+                <CartesianGrid stroke="rgba(0,0,0,0.06)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: '#6e6e73', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v: number) => formatBytes(v)} tick={{ fill: '#6e6e73', fontSize: 11 }} width={72} axisLine={false} tickLine={false} />
                 <Tooltip
                   formatter={(value) => formatBytes(Number(value ?? 0))}
-                  contentStyle={{ background: '#191816', border: '1px solid #2f2c27', color: '#e8e4dc' }}
+                  contentStyle={{ background: 'rgba(255,255,255,0.92)', border: '0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', color: '#1d1d1f' }}
                 />
                 <Legend />
-                <Bar dataKey="download" name="进流量" fill="#d4a054" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="upload" name="出流量" fill="#7ea37a" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="download" name="进流量" fill="#0071e3" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="upload" name="出流量" fill="#34c759" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
             <p className="num" style={{ color: 'var(--admin-muted)', marginTop: 12 }}>

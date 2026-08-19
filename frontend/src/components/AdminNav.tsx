@@ -18,15 +18,15 @@ export function AdminNav({ username, domain }: Props) {
   return (
     <header className="admin-top">
       <div className="admin-brand">
-        <b>Trojan Admin</b>
-        <span>{domain || '管理面板'}</span>
+        <b>管理</b>
+        <span>{domain || '面板'}</span>
       </div>
       <nav className="admin-nav">
         <Link className={location.pathname === '/admin' ? 'on' : ''} to="/admin">
           用户
         </Link>
         <Link className={location.pathname.startsWith('/admin/rules') ? 'on' : ''} to="/admin/rules">
-          Clash 规则
+          规则
         </Link>
       </nav>
       <div className="admin-top-actions">

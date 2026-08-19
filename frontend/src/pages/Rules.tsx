@@ -205,6 +205,8 @@ export function RulesPage() {
     <div className="admin-shell">
       <AdminNav username={username} domain={domain} />
       <main className="admin-main">
+        <p className="page-kicker">{domain || '节点'}</p>
+        <h1 className="page-title">规则</h1>
         <section className="panel">
           <div className="panel-head">
             <h2>客户端参数</h2>
@@ -321,9 +323,9 @@ export function RulesPage() {
         <div className="modal-mask" onClick={() => setImportOpen(false)}>
           <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
-              <h3>导入 Clash 配置</h3>
-              <button className="btn ghost" type="button" onClick={() => setImportOpen(false)}>
-                关闭
+              <h3>导入配置</h3>
+              <button className="icon-btn" type="button" onClick={() => setImportOpen(false)} aria-label="关闭">
+                ×
               </button>
             </div>
             <div className="import-body">

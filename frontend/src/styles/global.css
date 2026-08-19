@@ -1,23 +1,37 @@
 :root {
-  --ink: #1a1714;
-  --paper: #f3eee6;
-  --paper-deep: #e7dfd2;
-  --muted: #6f675c;
-  --line: #d8cfc0;
-  --gold: #b5812d;
-  --forest: #3d5a45;
-  --admin-bg: #111110;
-  --admin-panel: #191816;
-  --admin-panel-2: #201e1b;
-  --admin-line: #2f2c27;
-  --admin-text: #e8e4dc;
-  --admin-muted: #9a9488;
-  --admin-gold: #d4a054;
-  --admin-green: #7ea37a;
-  --admin-red: #c96b56;
-  --mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --sans: 'IBM Plex Sans', 'Outfit', sans-serif;
-  --display: 'Fraunces', 'Times New Roman', serif;
+  --ink: #1d1d1f;
+  --paper: #f5f5f7;
+  --paper-deep: #ffffff;
+  --muted: #6e6e73;
+  --line: rgba(0, 0, 0, 0.08);
+  --gold: #b45309;
+  --forest: #1d4d3a;
+  --blue: #0071e3;
+  --blue-press: #0077ed;
+  --green: #248a3d;
+  --red: #d70015;
+  --admin-bg: #f5f5f7;
+  --admin-panel: rgba(255, 255, 255, 0.72);
+  --admin-panel-2: rgba(255, 255, 255, 0.92);
+  --admin-line: rgba(0, 0, 0, 0.08);
+  --admin-text: #1d1d1f;
+  --admin-muted: #6e6e73;
+  --admin-gold: #0071e3;
+  --admin-green: #34c759;
+  --admin-red: #ff3b30;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 24px 80px rgba(0, 0, 0, 0.18);
+  --radius: 18px;
+  --radius-sm: 12px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+  font: 100%/1.47 var(--sans);
+  font-optical-sizing: auto;
 }
 
 * { box-sizing: border-box; }
@@ -26,9 +40,58 @@ body {
   margin: 0;
   color: var(--ink);
   background: var(--paper);
-  font-family: 'Outfit', 'IBM Plex Sans', sans-serif;
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 button, input, textarea, select { font: inherit; }
 a { color: inherit; }
 button { cursor: pointer; }
 code, .mono { font-family: var(--mono); }
+
+.btn {
+  appearance: none;
+  border: 0;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--admin-text);
+  padding: 8px 14px;
+  border-radius: 980px;
+  font-size: 14px;
+  font-weight: 510;
+  letter-spacing: -0.01em;
+  transition: transform 100ms ease-out, background 180ms var(--ease), opacity 180ms var(--ease);
+}
+.btn:hover { background: rgba(0, 0, 0, 0.08); }
+.btn:active { transform: scale(0.97); }
+.btn.primary {
+  background: var(--blue);
+  color: #fff;
+}
+.btn.primary:hover { background: var(--blue-press); }
+.btn.danger {
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--red);
+}
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .btn:active { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass: #ffffff;
+    --admin-panel: #ffffff;
+  }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --admin-line: #000;
+    --glass: #fff;
+  }
+}

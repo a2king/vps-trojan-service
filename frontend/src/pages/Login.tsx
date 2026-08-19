@@ -33,8 +33,8 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={onSubmit}>
-        <h1>管理后台</h1>
-        <p>使用安装时设置的管理员账号登录。</p>
+        <h1>登录</h1>
+        <p>使用管理员账号继续。</p>
         {error ? <p className="error">{error}</p> : null}
         <label className="field">
           <span>用户名</span>

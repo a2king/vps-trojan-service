@@ -11,7 +11,7 @@ export function HomePage() {
         <div className="brand">
           <svg className="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <path d="M8 22.5L16 7.5L24 22.5H8Z" stroke="currentColor" strokeWidth="1.6" />
-            <circle cx="16" cy="16.2" r="1.4" fill="#b5812d" />
+            <circle cx="16" cy="16.2" r="1.4" fill="currentColor" />
           </svg>
           Northline Studio
         </div>

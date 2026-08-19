@@ -74,6 +74,8 @@ export function AdminPage() {
       <AdminNav username={username} domain={domain} />
 
       <main className="admin-main">
+        <p className="page-kicker">{domain || '节点'}</p>
+        <h1 className="page-title">用户</h1>
         <div className="kpi-row">
           <div className="kpi">
             <em>用户</em>
@@ -99,7 +101,7 @@ export function AdminPage() {
 
         <section className="panel">
           <div className="panel-head">
-            <h2>用户列表</h2>
+            <h2>全部用户</h2>
           </div>
           <form className="create-form" onSubmit={onCreate}>
             <label className="field">
