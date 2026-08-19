@@ -6,12 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_admin
-from app.models import Account, Admin, TrafficDaily, TrafficSnapshot, TrojanUser
-from app.schemas import Overview, PasswordReset, TrafficPoint, UserCreate, UserOut, UserUpdate
+from app.models import Account, AccountIp, Admin, TrafficDaily, TrafficSnapshot, TrojanUser
+from app.schemas import Overview, PasswordReset, TrafficPoint, UserCreate, UserIpOut, UserOut, UserUpdate
 from app.security import generate_password, sha224_hex
 from app.services import get_trojan_user, set_trojan_enabled, to_user_out
+from app.services.ips import list_account_ips
 from app.services.traffic import daily_map, month_start, month_totals, overview_stats, series_daily, series_monthly
-from app.timeutil import now_local
+from app.timeutil import now_local, to_iso
 
 router = APIRouter(prefix="/api", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -154,6 +155,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
     trojan = get_trojan_user(db, account.password_sha224)
     db.query(TrafficDaily).filter(TrafficDaily.account_id == account.id).delete()
     db.query(TrafficSnapshot).filter(TrafficSnapshot.account_id == account.id).delete()
+    db.query(AccountIp).filter(AccountIp.account_id == account.id).delete()
     if trojan is not None:
         db.delete(trojan)
     db.delete(account)
@@ -169,3 +171,13 @@ def user_traffic(
     _get_account(db, user_id)
     raw = series_daily(db, user_id) if granularity == "day" else series_monthly(db, user_id)
     return [TrafficPoint(**item) for item in raw]
+
+
+@router.get("/users/{user_id}/ips", response_model=list[UserIpOut])
+def user_ips(user_id: int, db: Session = Depends(get_db)) -> list[UserIpOut]:
+    _get_account(db, user_id)
+    rows = list_account_ips(db, user_id)
+    return [
+        UserIpOut(ip=row.ip, last_seen_at=to_iso(row.last_seen_at) or "")
+        for row in rows
+    ]

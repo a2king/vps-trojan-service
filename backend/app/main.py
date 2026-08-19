@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
-from app.models import Account, Admin, ClashRule, ClashSetting, TrafficDaily, TrafficSnapshot, TrojanUser  # noqa: F401
+from app.models import Account, AccountIp, Admin, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser  # noqa: F401
 from app.mysql_bridge import create_mysql_server
 from app.routers import auth, clash, subscribe, users
 from app.security import hash_admin_password

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import Account, TrafficDaily, TrafficSnapshot, TrojanUser
+from app.services.ips import ingest_trojan_ips
 from app.timeutil import TZ, now_local
 
 settings = get_settings()
@@ -70,6 +71,7 @@ def collect_once(db: Session) -> None:
         daily.download_bytes = int(daily.download_bytes) + d_delta
         daily.upload_bytes = int(daily.upload_bytes) + u_delta
 
+    ingest_trojan_ips(db)
     cutoff = today - timedelta(days=max(1, settings.log_retention_days))
     db.query(TrafficDaily).filter(TrafficDaily.stat_date < cutoff).delete()
     db.commit()

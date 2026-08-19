@@ -35,6 +35,11 @@ class TrafficPoint(BaseModel):
     upload: int
 
 
+class UserIpOut(BaseModel):
+    ip: str
+    last_seen_at: str
+
+
 class UserOut(BaseModel):
     id: int
     name: str

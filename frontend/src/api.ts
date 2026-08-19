@@ -32,6 +32,11 @@ export type TrafficPoint = {
   upload: number
 }
 
+export type UserIp = {
+  ip: string
+  last_seen_at: string
+}
+
 export type ClashRule = {
   id: number
   line: string
@@ -121,6 +126,7 @@ export const api = {
   deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
   traffic: (id: number, granularity: 'day' | 'month') =>
     request<TrafficPoint[]>(`/api/users/${id}/traffic?granularity=${granularity}`),
+  userIps: (id: number) => request<UserIp[]>(`/api/users/${id}/ips`),
   clashSettings: () => request<{ settings: ClashSettings }>('/api/clash/settings'),
   saveClashSettings: (settings: ClashSettings) =>
     request<{ settings: ClashSettings }>('/api/clash/settings', {

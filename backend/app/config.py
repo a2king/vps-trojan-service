@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     traffic_interval_seconds: int = 300
     log_retention_days: int = 31
     timezone: str = "Asia/Shanghai"
+    trojan_log_path: str = "/var/log/trojan.log"
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { TrafficPoint, User } from '../api'
+import type { TrafficPoint, User, UserIp } from '../api'
 import { api } from '../api'
 import { copyText, formatBytes, formatDateTime, formatLastSeen, formatPair } from '../lib/format'
 
@@ -25,6 +25,7 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
   const [current, setCurrent] = useState(user)
   const [granularity, setGranularity] = useState<'day' | 'month'>('day')
   const [points, setPoints] = useState<TrafficPoint[]>([])
+  const [ips, setIps] = useState<UserIp[]>([])
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -40,6 +41,16 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
       cancelled = true
     }
   }, [current.id, granularity])
+
+  useEffect(() => {
+    let cancelled = false
+    api.userIps(current.id).then((data) => {
+      if (!cancelled) setIps(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [current.id])
 
   const chartData = useMemo(
     () =>
@@ -202,6 +213,29 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
               今日 {formatPair(current.today_download, current.today_upload)}　本月{' '}
               {formatPair(current.month_download, current.month_upload)}
             </p>
+            <div className="ip-block">
+              <h4>源 IP</h4>
+              {ips.length === 0 ? (
+                <p className="settings-hint" style={{ padding: 0 }}>暂无记录。用户连上代理后会出现在这里。</p>
+              ) : (
+                <table className="ip-table">
+                  <thead>
+                    <tr>
+                      <th>IP</th>
+                      <th>最近访问</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ips.map((item) => (
+                      <tr key={item.ip}>
+                        <td className="num">{item.ip}</td>
+                        <td>{formatDateTime(item.last_seen_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       </div>

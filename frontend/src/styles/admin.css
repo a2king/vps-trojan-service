@@ -274,6 +274,31 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   min-width: 0;
   overflow: hidden;
 }
+.ip-block {
+  margin-top: 20px;
+}
+.ip-block h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.ip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ip-table th, .ip-table td {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.ip-table th {
+  color: var(--admin-muted);
+  font-weight: 510;
+  font-size: 12px;
+}
+.ip-table tr:last-child td { border-bottom: 0; }
 .meta { display: grid; gap: 14px; margin-bottom: 20px; }
 .meta div { display: flex; flex-direction: column; gap: 4px; }
 .meta em {

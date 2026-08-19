@@ -74,3 +74,21 @@ class ClashRule(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     line: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+
+
+class AccountIp(Base):
+    __tablename__ = "account_ips"
+    __table_args__ = (UniqueConstraint("account_id", "ip", name="uk_account_ip"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
+    ip: Mapped[str] = mapped_column(String(64), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
+class LogCursor(Base):
+    __tablename__ = "log_cursors"
+
+    name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    inode: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    offset: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
