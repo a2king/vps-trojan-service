@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
 import type { SystemDisk, SystemInfo } from '../api'
 import { api } from '../api'
 import { formatBytes, formatDateTime, formatUptime } from '../lib/format'
-
-type AdminContext = { username: string; domain: string }
 
 function usageClass(percent: number): string {
   if (percent >= 90) return 'high'
@@ -34,7 +31,6 @@ function primaryDisk(disks: SystemDisk[]): SystemDisk | null {
 }
 
 export function DashboardPage() {
-  const { domain } = useOutletContext<AdminContext>()
   const [info, setInfo] = useState<SystemInfo | null>(null)
   const [error, setError] = useState('')
 
@@ -92,8 +88,6 @@ export function DashboardPage() {
 
   return (
     <main className="admin-main">
-      <p className="page-kicker">{domain || '节点'}</p>
-      <h1 className="page-title">系统看板</h1>
       {error ? <p className="error">{error}</p> : null}
 
       <div className="usage-row">

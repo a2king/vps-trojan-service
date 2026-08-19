@@ -1,14 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useOutletContext } from 'react-router-dom'
 import type { Overview, User } from '../api'
 import { api } from '../api'
 import { UserModal } from '../components/UserModal'
 import { formatLastSeen, formatPair } from '../lib/format'
 
-type AdminContext = { username: string; domain: string }
-
 export function AdminPage() {
-  const { domain } = useOutletContext<AdminContext>()
   const [overview, setOverview] = useState<Overview | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [selected, setSelected] = useState<User | null>(null)
@@ -65,8 +61,6 @@ export function AdminPage() {
   return (
     <>
       <main className="admin-main">
-        <p className="page-kicker">{domain || '节点'}</p>
-        <h1 className="page-title">用户</h1>
         <div className="kpi-row">
           <div className="kpi">
             <em>用户</em>

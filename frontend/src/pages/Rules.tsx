@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
-import { useOutletContext } from 'react-router-dom'
 import type { ClashImportPreview, ClashRule, ClashSettings } from '../api'
 import { api } from '../api'
-
-type AdminContext = { username: string; domain: string }
 
 function policyOf(line: string): string {
   const parts = line.split(',').map((item) => item.trim()).filter(Boolean)
@@ -24,7 +21,6 @@ function policyClass(policy: string): string {
 }
 
 export function RulesPage() {
-  const { domain } = useOutletContext<AdminContext>()
   const [rules, setRules] = useState<ClashRule[]>([])
   const [settings, setSettings] = useState<ClashSettings | null>(null)
   const [query, setQuery] = useState('')
@@ -198,8 +194,6 @@ export function RulesPage() {
   return (
     <>
       <main className="admin-main">
-        <p className="page-kicker">{domain || '节点'}</p>
-        <h1 className="page-title">规则</h1>
         <section className="panel">
           <div className="panel-head">
             <h2>客户端参数</h2>

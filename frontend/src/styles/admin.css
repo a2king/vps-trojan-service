@@ -60,21 +60,7 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.admin-main { padding: 28px 32px 80px; max-width: 1180px; margin: 0 auto; }
-
-.page-kicker {
-  margin: 0 0 6px;
-  color: var(--admin-muted);
-  font-size: 13px;
-  font-weight: 510;
-}
-.page-title {
-  margin: 0 0 22px;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
-}
+.admin-main { padding: 22px 32px 80px; max-width: 1180px; margin: 0 auto; }
 
 .kpi-row {
   display: grid;
