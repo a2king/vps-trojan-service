@@ -306,27 +306,73 @@ install_trojan_bin() {
   systemctl daemon-reload
 }
 
+wait_for_admin() {
+  local i
+  for i in $(seq 1 20); do
+    if curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  red "管理后端未能在 20 秒内启动"
+  systemctl status trojan-admin --no-pager || true
+  exit 1
+}
+
 setup_admin_service() {
   render "${INSTALL_DIR}/deploy/trojan-admin.service.tpl" /etc/systemd/system/trojan-admin.service
   systemctl daemon-reload
   systemctl enable nginx trojan-admin trojan
   green "启动管理后端…"
   systemctl restart trojan-admin
-  local i
-  for i in $(seq 1 20); do
-    if curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
-      break
-    fi
-    if [[ "$i" -eq 20 ]]; then
-      red "管理后端未能在 20 秒内启动"
-      systemctl status trojan-admin --no-pager || true
-      exit 1
-    fi
-    sleep 1
-  done
+  wait_for_admin
   green "启动 Trojan…"
   systemctl restart trojan
   systemctl restart nginx
+}
+
+load_installed_env() {
+  local env_file="${INSTALL_DIR}/.env"
+  if [[ ! -f "$env_file" ]]; then
+    red "未找到 ${env_file}，请先完成安装"
+    exit 1
+  fi
+  set -a
+  # shellcheck source=/dev/null
+  source "$env_file"
+  set +a
+  [[ -n "${DOMAIN:-}" ]] || { red ".env 里没有 DOMAIN"; exit 1; }
+  export DOMAIN INSTALL_DIR NGINX_USER
+}
+
+redeploy() {
+  require_root
+  detect_os
+  load_installed_env
+  export PATH="/root/.local/bin:${HOME}/.local/bin:${PATH}"
+
+  green "更新并重启（前端打包 + nginx 配置 + 后端 + nginx）"
+  install_node
+  install_uv
+  setup_backend
+  build_frontend
+  link_frontend
+
+  green "更新 nginx 配置…"
+  write_nginx "${INSTALL_DIR}/deploy/nginx.conf.tpl"
+
+  green "重启管理后端…"
+  systemctl restart trojan-admin
+  wait_for_admin
+
+  green "重启 nginx…"
+  systemctl restart nginx
+
+  echo
+  green "更新完成"
+  green "伪装首页: https://${DOMAIN}/"
+  green "管理后台: https://${DOMAIN}/admin"
+  green "Clash 订阅: https://${DOMAIN}/config/<用户密码>"
 }
 
 install_all() {
@@ -409,6 +455,7 @@ menu() {
   echo " 1. 安装"
   echo " 2. 卸载"
   echo " 3. 修复证书"
+  echo " 4. 更新并重启（前端 + nginx 配置 + 后端）"
   echo " 0. 退出"
   echo
   read -r -p "请输入数字: " num
@@ -416,6 +463,7 @@ menu() {
     1) install_all ;;
     2) remove_all ;;
     3) repair_cert ;;
+    4) redeploy ;;
     0) exit 0 ;;
     *) red "请输入正确数字"; sleep 1; menu ;;
   esac
