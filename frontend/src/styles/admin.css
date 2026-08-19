@@ -405,20 +405,39 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   font-size: 12px;
   font-weight: 510;
 }
-.secret {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.secret code {
-  flex: 1;
+.copy-block {
+  position: relative;
   background: rgba(0, 0, 0, 0.04);
-  padding: 8px 10px;
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   border-radius: 10px;
+  padding: 10px 34px 10px 12px;
 }
+.copy-block code {
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.copy-block-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--admin-muted);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  display: grid;
+  place-items: center;
+  transition: transform 100ms ease-out, background 160ms var(--ease), color 160ms var(--ease);
+}
+.copy-block-btn:hover { background: #f2f2f7; color: var(--admin-text); }
+.copy-block-btn:active { transform: scale(0.94); }
+.copy-block-btn.ok { color: var(--green); }
+.copy-block-btn svg { width: 13px; height: 13px; display: block; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .tabs {
   display: inline-flex;

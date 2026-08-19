@@ -13,7 +13,54 @@ import type { TrafficPoint, User, UserIp } from '../api'
 import { api } from '../api'
 import { copyText, formatBytes, formatDateTime, formatLastSeen, formatPair } from '../lib/format'
 
-type Props = {
+type CopyBlockProps = {
+  value: string
+  label: string
+  onCopied: (message: string) => void
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="5.25" y="5.25" width="8.5" height="8.5" rx="1.6" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M10.5 5.25V3.9A1.65 1.65 0 0 0 8.85 2.25H3.9A1.65 1.65 0 0 0 2.25 3.9v4.95A1.65 1.65 0 0 0 3.9 10.5h1.35" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3.5 8.2 6.4 11.1 12.5 4.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CopyBlock({ value, label, onCopied }: CopyBlockProps) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    await copyText(value)
+    setCopied(true)
+    onCopied(`已复制${label}`)
+    window.setTimeout(() => setCopied(false), 1600)
+  }
+
+  return (
+    <div className="copy-block">
+      <code>{value}</code>
+      <button
+        className={`copy-block-btn${copied ? ' ok' : ''}`}
+        type="button"
+        onClick={copy}
+        aria-label={`复制${label}`}
+        title={copied ? '已复制' : '复制'}
+      >
+        {copied ? <CheckIcon /> : <CopyIcon />}
+      </button>
+    </div>
+  )
+}
   user: User
   onClose: () => void
   onChanged: (user: User) => void
@@ -141,34 +188,15 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
               ) : null}
               <div>
                 <em>密码</em>
-                <div className="secret">
-                  <code>{current.password}</code>
-                  <button className="btn" type="button" onClick={() => copyText(current.password).then(() => toast('已复制密码'))}>
-                    复制
-                  </button>
-                </div>
+                <CopyBlock value={current.password} label="密码" onCopied={toast} />
               </div>
               <div>
                 <em>Clash 订阅</em>
-                <div className="secret">
-                  <code>{current.clash_subscribe_url}</code>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => copyText(current.clash_subscribe_url).then(() => toast('已复制 Clash 订阅地址'))}
-                  >
-                    复制
-                  </button>
-                </div>
+                <CopyBlock value={current.clash_subscribe_url} label="Clash 订阅地址" onCopied={toast} />
               </div>
               <div>
                 <em>分享链接</em>
-                <div className="secret">
-                  <code>{current.share_uri}</code>
-                  <button className="btn" type="button" onClick={() => copyText(current.share_uri).then(() => toast('已复制链接'))}>
-                    复制
-                  </button>
-                </div>
+                <CopyBlock value={current.share_uri} label="链接" onCopied={toast} />
               </div>
             </div>
             <div className="actions">
