@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 import type { ClashImportPreview, ClashRule, ClashSettings } from '../api'
 import { api } from '../api'
-import { AdminNav } from '../components/AdminNav'
+
+type AdminContext = { username: string; domain: string }
 
 function policyOf(line: string): string {
   const parts = line.split(',').map((item) => item.trim()).filter(Boolean)
@@ -23,9 +24,7 @@ function policyClass(policy: string): string {
 }
 
 export function RulesPage() {
-  const navigate = useNavigate()
-  const [username, setUsername] = useState(localStorage.getItem('username') || '')
-  const [domain, setDomain] = useState('')
+  const { domain } = useOutletContext<AdminContext>()
   const [rules, setRules] = useState<ClashRule[]>([])
   const [settings, setSettings] = useState<ClashSettings | null>(null)
   const [query, setQuery] = useState('')
@@ -49,9 +48,7 @@ export function RulesPage() {
   }
 
   async function refresh() {
-    const [me, list, profile] = await Promise.all([api.me(), api.clashRules(), api.clashSettings()])
-    setUsername(me.username)
-    setDomain(me.domain)
+    const [list, profile] = await Promise.all([api.clashRules(), api.clashSettings()])
     setRules(list)
     setSettings(profile.settings)
     setNodeName(String(profile.settings.node_name || ''))
@@ -61,20 +58,17 @@ export function RulesPage() {
   }
 
   useEffect(() => {
-    document.title = 'Clash 规则'
-    if (!localStorage.getItem('token')) {
-      navigate('/admin/login', { replace: true })
-      return
-    }
+    document.title = '规则'
     refresh().catch((err: unknown) => {
       setError(err instanceof Error ? err.message : '加载失败')
     })
-  }, [navigate])
+  }, [])
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    if (!keyword) return rules
-    return rules.filter((item) => item.line.toLowerCase().includes(keyword))
+    return rules
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => !keyword || item.line.toLowerCase().includes(keyword))
   }, [rules, query])
 
   async function onCreate(event: FormEvent) {
@@ -202,8 +196,7 @@ export function RulesPage() {
   const allSelected = Boolean(preview && preview.new_rules.length > 0 && selectedCount === preview.new_rules.length)
 
   return (
-    <div className="admin-shell">
-      <AdminNav username={username} domain={domain} />
+    <>
       <main className="admin-main">
         <p className="page-kicker">{domain || '节点'}</p>
         <h1 className="page-title">规则</h1>
@@ -279,8 +272,7 @@ export function RulesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((item) => {
-                    const index = rules.findIndex((row) => row.id === item.id)
+                  {filtered.map(({ item, index }) => {
                     const policy = policyOf(item.line)
                     return (
                       <tr key={item.id} className="rule-row">
@@ -391,6 +383,6 @@ export function RulesPage() {
         </div>
       ) : null}
       {toast ? <div className="toast">{toast}</div> : null}
-    </div>
+    </>
   )
 }

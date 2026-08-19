@@ -1,15 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 import type { Overview, User } from '../api'
 import { api } from '../api'
 import { UserModal } from '../components/UserModal'
-import { AdminNav } from '../components/AdminNav'
 import { formatLastSeen, formatPair } from '../lib/format'
 
+type AdminContext = { username: string; domain: string }
+
 export function AdminPage() {
-  const navigate = useNavigate()
-  const [username, setUsername] = useState(localStorage.getItem('username') || '')
-  const [domain, setDomain] = useState('')
+  const { domain } = useOutletContext<AdminContext>()
   const [overview, setOverview] = useState<Overview | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [selected, setSelected] = useState<User | null>(null)
@@ -26,23 +25,17 @@ export function AdminPage() {
   }
 
   async function refresh() {
-    const [me, stats, list] = await Promise.all([api.me(), api.overview(), api.users()])
-    setUsername(me.username)
-    setDomain(me.domain)
+    const [stats, list] = await Promise.all([api.overview(), api.users()])
     setOverview(stats)
     setUsers(list)
   }
 
   useEffect(() => {
-    document.title = '用户管理'
-    if (!localStorage.getItem('token')) {
-      navigate('/admin/login', { replace: true })
-      return
-    }
+    document.title = '用户'
     refresh().catch((err: unknown) => {
       setError(err instanceof Error ? err.message : '加载失败')
     })
-  }, [navigate])
+  }, [])
 
   async function onCreate(event: FormEvent) {
     event.preventDefault()
@@ -70,9 +63,7 @@ export function AdminPage() {
   }
 
   return (
-    <div className="admin-shell">
-      <AdminNav username={username} domain={domain} />
-
+    <>
       <main className="admin-main">
         <p className="page-kicker">{domain || '节点'}</p>
         <h1 className="page-title">用户</h1>
@@ -177,6 +168,6 @@ export function AdminPage() {
         />
       ) : null}
       {toast ? <div className="toast">{toast}</div> : null}
-    </div>
+    </>
   )
 }

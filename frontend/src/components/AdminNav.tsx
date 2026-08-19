@@ -8,6 +8,12 @@ type Props = {
 export function AdminNav({ username, domain }: Props) {
   const location = useLocation()
   const navigate = useNavigate()
+  const onUsers = location.pathname === '/admin'
+  const onRules = location.pathname.startsWith('/admin/rules')
+
+  function go(path: string) {
+    if (location.pathname !== path) navigate(path)
+  }
 
   function logout() {
     localStorage.removeItem('token')
@@ -22,10 +28,22 @@ export function AdminNav({ username, domain }: Props) {
         <span>{domain || '面板'}</span>
       </div>
       <nav className="admin-nav">
-        <Link className={location.pathname === '/admin' ? 'on' : ''} to="/admin">
+        <Link
+          className={onUsers ? 'on' : ''}
+          to="/admin"
+          onPointerDown={(event) => {
+            if (event.button === 0) go('/admin')
+          }}
+        >
           用户
         </Link>
-        <Link className={location.pathname.startsWith('/admin/rules') ? 'on' : ''} to="/admin/rules">
+        <Link
+          className={onRules ? 'on' : ''}
+          to="/admin/rules"
+          onPointerDown={(event) => {
+            if (event.button === 0) go('/admin/rules')
+          }}
+        >
           规则
         </Link>
       </nav>

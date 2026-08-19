@@ -14,11 +14,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 28px;
-  background: var(--glass);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: 0 1px 0 var(--line);
+  background: #fff;
+  border-bottom: 1px solid var(--line);
 }
 .admin-brand {
   display: flex;
@@ -54,7 +51,7 @@
   border-radius: 980px;
   font-size: 13px;
   font-weight: 510;
-  transition: background 200ms var(--ease), color 200ms var(--ease), transform 100ms ease-out;
+  transition: background 80ms linear, color 80ms linear, transform 100ms ease-out;
 }
 .admin-nav a:active { transform: scale(0.97); }
 .admin-nav a.on {
@@ -86,10 +83,8 @@
   margin-bottom: 22px;
 }
 .kpi {
-  background: var(--admin-panel);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  border: 1px solid var(--glass-border);
+  background: #fff;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px 18px 16px;
   box-shadow: var(--shadow);
@@ -112,10 +107,8 @@
 .kpi small { color: var(--admin-muted); font-size: 12px; }
 
 .panel {
-  background: var(--admin-panel);
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  border: 1px solid var(--glass-border);
+  background: #fff;
+  border: 1px solid var(--line);
   border-radius: 22px;
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -152,7 +145,8 @@ table.users th {
 }
 table.users tbody tr {
   cursor: pointer;
-  transition: background 160ms var(--ease);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 48px;
 }
 table.users tbody tr:hover { background: rgba(0, 0, 0, 0.03); }
 table.users tbody tr:active { background: rgba(0, 0, 0, 0.05); }
@@ -186,14 +180,12 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 }
 .login-card {
   width: min(400px, 100%);
-  background: var(--glass);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid var(--glass-border);
+  background: #fff;
+  border: 1px solid var(--line);
   border-radius: 28px;
   padding: 36px 32px;
   box-shadow: var(--shadow-lg);
-  animation: material-in 0.4s var(--ease);
+  animation: material-in 0.32s var(--ease);
 }
 .login-card h1 {
   margin: 0 0 6px;
@@ -234,13 +226,11 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   width: min(980px, 100%);
   max-height: min(88vh, 860px);
   overflow: auto;
-  background: var(--glass);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid var(--glass-border);
+  background: #fff;
+  border: 1px solid var(--line);
   border-radius: 24px;
   box-shadow: var(--shadow-lg);
-  animation: sheet-in 0.4s var(--ease);
+  animation: sheet-in 0.32s var(--ease);
   transform-origin: center top;
 }
 .modal-head {
@@ -250,8 +240,7 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   padding: 16px 20px;
   position: sticky;
   top: 0;
-  background: inherit;
-  backdrop-filter: blur(20px);
+  background: #fff;
 }
 .modal-head h3 {
   margin: 0;
@@ -319,7 +308,7 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   border-radius: 980px;
   font-size: 13px;
   font-weight: 510;
-  transition: background 180ms var(--ease), color 180ms var(--ease), transform 100ms ease-out;
+  transition: background 80ms linear, color 80ms linear, transform 100ms ease-out;
 }
 .tab:active { transform: scale(0.97); }
 .tab.on {
@@ -333,12 +322,11 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   left: 50%;
   bottom: 28px;
   transform: translateX(-50%);
-  background: rgba(28, 28, 30, 0.88);
+  background: rgba(28, 28, 30, 0.92);
   color: #fff;
   padding: 12px 18px;
   border-radius: 980px;
   z-index: 30;
-  backdrop-filter: blur(20px);
   font-size: 14px;
   font-weight: 510;
   animation: toast-in 0.4s var(--ease);
@@ -431,12 +419,12 @@ table.users tr.rule-row { cursor: default; }
   to { opacity: 1; }
 }
 @keyframes sheet-in {
-  from { opacity: 0; transform: translateY(18px) scale(0.98); filter: blur(8px); }
-  to { opacity: 1; transform: none; filter: none; }
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes material-in {
-  from { opacity: 0; transform: scale(0.96); filter: blur(10px); }
-  to { opacity: 1; transform: none; filter: none; }
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(12px); }
