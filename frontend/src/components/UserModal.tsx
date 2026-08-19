@@ -187,8 +187,11 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                 <XAxis dataKey="label" tick={{ fill: '#6e6e73', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v: number) => formatBytes(v)} tick={{ fill: '#6e6e73', fontSize: 11 }} width={72} axisLine={false} tickLine={false} />
                 <Tooltip
+                  isAnimationActive={false}
+                  allowEscapeViewBox={{ x: false, y: false }}
+                  wrapperStyle={{ outline: 'none', pointerEvents: 'none', zIndex: 2 }}
                   formatter={(value) => formatBytes(Number(value ?? 0))}
-                  contentStyle={{ background: 'rgba(255,255,255,0.92)', border: '0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', color: '#1d1d1f' }}
+                  contentStyle={{ background: '#fff', border: '0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', color: '#1d1d1f' }}
                 />
                 <Legend />
                 <Bar dataKey="download" name="进流量" fill="#0071e3" radius={[6, 6, 0, 0]} />

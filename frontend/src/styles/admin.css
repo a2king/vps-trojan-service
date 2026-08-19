@@ -225,7 +225,8 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 .modal {
   width: min(980px, 100%);
   max-height: min(88vh, 860px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 24px;
@@ -265,10 +266,14 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 .icon-btn:active { transform: scale(0.94); }
 .modal-body {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 340px minmax(0, 1fr);
 }
 .modal-side { padding: 8px 20px 24px; border-right: 1px solid var(--line); }
-.modal-chart { padding: 8px 20px 24px; }
+.modal-chart {
+  padding: 8px 20px 24px;
+  min-width: 0;
+  overflow: hidden;
+}
 .meta { display: grid; gap: 14px; margin-bottom: 20px; }
 .meta div { display: flex; flex-direction: column; gap: 4px; }
 .meta em {
