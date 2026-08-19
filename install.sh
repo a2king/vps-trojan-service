@@ -252,11 +252,33 @@ issue_cert() {
     curl https://get.acme.sh | sh -s email="${ACME_EMAIL}"
   fi
   /root/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+
+  # 证书签发时还没装 trojan.service。reloadcmd 必须在 unit 不存在时成功返回，
+  # 否则 acme.sh 非 0 退出会让 set -e 直接中断，后续永远装不上 Trojan。
+  local reloadcmd='if [ -f /etc/systemd/system/trojan.service ]; then systemctl restart trojan; fi'
+  local acme_home="/root/.acme.sh"
+  if [[ -d "${acme_home}/${DOMAIN}" || -d "${acme_home}/${DOMAIN}_ecc" ]]; then
+    /root/.acme.sh/acme.sh --install-cert -d "${DOMAIN}" \
+      --key-file "${CERT_DIR}/private.key" \
+      --fullchain-file "${CERT_DIR}/fullchain.cer" \
+      --reloadcmd "$reloadcmd" || true
+  fi
+
+  local issue_rc=0
+  set +e
   /root/.acme.sh/acme.sh --issue -d "${DOMAIN}" -w "${ACME_WEBROOT}" ${1:+--force}
+  issue_rc=$?
+  set -e
+  # 0=成功，2=证书已存在/未到续期时间，均可继续安装
+  if [[ "$issue_rc" -ne 0 && "$issue_rc" -ne 2 ]]; then
+    red "证书申请失败（acme.sh 退出码 ${issue_rc}）"
+    exit 1
+  fi
+
   /root/.acme.sh/acme.sh --install-cert -d "${DOMAIN}" \
     --key-file "${CERT_DIR}/private.key" \
     --fullchain-file "${CERT_DIR}/fullchain.cer" \
-    --reloadcmd "systemctl restart trojan"
+    --reloadcmd "$reloadcmd"
   if [[ ! -s "${CERT_DIR}/fullchain.cer" ]]; then
     red "证书申请失败"
     exit 1
@@ -281,6 +303,7 @@ install_trojan_bin() {
   export TROJAN_FALLBACK_PASSWORD
   render "${INSTALL_DIR}/deploy/trojan.json.tpl" /etc/trojan/config.json
   install -m 644 "${INSTALL_DIR}/deploy/trojan.service" /etc/systemd/system/trojan.service
+  systemctl daemon-reload
 }
 
 setup_admin_service() {
