@@ -114,6 +114,115 @@ check_ports() {
   fi
 }
 
+enable_bbr() {
+  green "开启 TCP BBR 加速…"
+  local major minor
+  major="$(uname -r | cut -d. -f1)"
+  minor="$(uname -r | cut -d. -f2)"
+  if [[ "${major:-0}" -lt 4 ]] || { [[ "$major" -eq 4 ]] && [[ "${minor:-0}" -lt 9 ]]; }; then
+    red "当前内核 $(uname -r) 低于 4.9，无法使用官方 BBR，已跳过"
+    return 0
+  fi
+  modprobe tcp_bbr 2>/dev/null || true
+  modprobe sch_fq 2>/dev/null || true
+  mkdir -p /etc/modules-load.d /etc/sysctl.d
+  install -m 644 "${INSTALL_DIR}/deploy/bbr-modules.conf" /etc/modules-load.d/vps-bbr.conf
+  install -m 644 "${INSTALL_DIR}/deploy/bbr-sysctl.conf" /etc/sysctl.d/99-vps-bbr.conf
+  sysctl --system >/dev/null 2>&1 || sysctl -p /etc/sysctl.d/99-vps-bbr.conf >/dev/null 2>&1 || true
+  local algo
+  algo="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)"
+  if [[ "$algo" == "bbr" ]]; then
+    green "BBR 已启用（qdisc=$(sysctl -n net.core.default_qdisc)）"
+  else
+    red "BBR 未能生效，当前算法：${algo:-未知}。可用算法：$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)"
+  fi
+}
+
+setup_public_dns() {
+  green "切换系统 DNS 为 8.8.8.8 / 1.1.1.1 / 223.5.5.5…"
+  local resolv_body
+  resolv_body=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 223.5.5.5\noptions timeout:2 attempts:3\n'
+
+  mkdir -p /etc/systemd/resolved.conf.d
+  cat > /etc/systemd/resolved.conf.d/99-vps-dns.conf <<'EOF'
+[Resolve]
+DNS=8.8.8.8 1.1.1.1 223.5.5.5
+FallbackDNS=8.8.4.4 1.0.0.1 223.6.6.6
+Domains=~.
+EOF
+
+  mkdir -p /etc/cloud/cloud.cfg.d
+  cat > /etc/cloud/cloud.cfg.d/99-vps-dns.cfg <<'EOF'
+# 禁止 cloud-init 把云厂商 DHCP DNS 写回 resolv.conf
+manage_resolv_conf: false
+EOF
+
+  if [[ -d /etc/netplan ]]; then
+    install -m 644 "${INSTALL_DIR}/deploy/netplan-dns.yaml" /etc/netplan/99-vps-dns.yaml
+    netplan generate >/dev/null 2>&1 || true
+    netplan apply >/dev/null 2>&1 || true
+  fi
+
+  if [[ -d /etc/NetworkManager/conf.d ]]; then
+    cat > /etc/NetworkManager/conf.d/99-vps-dns.conf <<'EOF'
+[main]
+dns=none
+EOF
+  fi
+
+  if [[ -f /etc/dhcp/dhclient.conf ]]; then
+    if ! grep -q "supersede domain-name-servers 8.8.8.8" /etc/dhcp/dhclient.conf; then
+      echo "supersede domain-name-servers 8.8.8.8, 1.1.1.1, 223.5.5.5;" >> /etc/dhcp/dhclient.conf
+    fi
+  fi
+
+  if command -v nmcli >/dev/null 2>&1; then
+    local con
+    while IFS= read -r con; do
+      [[ -n "$con" ]] || continue
+      nmcli connection modify "$con" ipv4.ignore-auto-dns yes ipv4.dns "8.8.8.8 1.1.1.1 223.5.5.5" >/dev/null 2>&1 || true
+      nmcli connection modify "$con" ipv6.ignore-auto-dns yes >/dev/null 2>&1 || true
+    done < <(nmcli -t -f NAME connection show 2>/dev/null || true)
+  fi
+
+  if systemctl list-unit-files systemd-resolved.service >/dev/null 2>&1; then
+    systemctl restart systemd-resolved 2>/dev/null || true
+    if command -v resolvectl >/dev/null 2>&1; then
+      local iface
+      for iface in /sys/class/net/*; do
+        iface="$(basename "$iface")"
+        [[ "$iface" == "lo" ]] && continue
+        resolvectl dns "$iface" 8.8.8.8 1.1.1.1 223.5.5.5 >/dev/null 2>&1 || true
+        resolvectl domain "$iface" '~.' >/dev/null 2>&1 || true
+      done
+    fi
+  fi
+
+  if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+    systemctl reload NetworkManager 2>/dev/null || systemctl restart NetworkManager 2>/dev/null || true
+  fi
+
+  if [[ -L /etc/resolv.conf ]]; then
+    true
+  else
+    printf '%s' "$resolv_body" > /etc/resolv.conf
+  fi
+
+  green "当前 DNS："
+  grep -E '^nameserver' /etc/resolv.conf 2>/dev/null || true
+  if command -v resolvectl >/dev/null 2>&1; then
+    resolvectl dns 2>/dev/null | head -n 20 || true
+  fi
+}
+
+optimize_network() {
+  require_root
+  detect_os
+  enable_bbr
+  setup_public_dns
+  green "网络优化完成"
+}
+
 check_dns() {
   local real localip
   localip="$(public_ip | tr -d '[:space:]')"
@@ -378,6 +487,8 @@ redeploy() {
 install_all() {
   require_root
   detect_os
+  enable_bbr
+  setup_public_dns
   ask_inputs
   check_ports
   check_dns
@@ -456,6 +567,7 @@ menu() {
   echo " 2. 卸载"
   echo " 3. 修复证书"
   echo " 4. 更新并重启（前端 + nginx 配置 + 后端）"
+  echo " 5. 开启 BBR 并切换公共 DNS"
   echo " 0. 退出"
   echo
   read -r -p "请输入数字: " num
@@ -464,6 +576,7 @@ menu() {
     2) remove_all ;;
     3) repair_cert ;;
     4) redeploy ;;
+    5) optimize_network ;;
     0) exit 0 ;;
     *) red "请输入正确数字"; sleep 1; menu ;;
   esac

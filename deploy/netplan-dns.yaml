@@ -1,0 +1,15 @@
+network:
+  version: 2
+  ethernets:
+    all-ethernet:
+      match:
+        name: "e*"
+      dhcp4-overrides:
+        use-dns: false
+      dhcp6-overrides:
+        use-dns: false
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 1.1.1.1
+          - 223.5.5.5
