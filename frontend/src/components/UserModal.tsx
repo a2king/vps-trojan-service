@@ -138,6 +138,19 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                 </div>
               </div>
               <div>
+                <em>Clash 订阅</em>
+                <div className="secret">
+                  <code>{current.clash_subscribe_url}</code>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => copyText(current.clash_subscribe_url).then(() => toast('已复制 Clash 订阅地址'))}
+                  >
+                    复制
+                  </button>
+                </div>
+              </div>
+              <div>
                 <em>分享链接</em>
                 <div className="secret">
                   <code>{current.share_uri}</code>

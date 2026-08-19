@@ -8,10 +8,11 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
-from app.models import Account, Admin, TrafficDaily, TrafficSnapshot, TrojanUser  # noqa: F401
+from app.models import Account, Admin, ClashRule, ClashSetting, TrafficDaily, TrafficSnapshot, TrojanUser  # noqa: F401
 from app.mysql_bridge import create_mysql_server
-from app.routers import auth, users
+from app.routers import auth, clash, subscribe, users
 from app.security import hash_admin_password
+from app.services.clash import seed_clash
 from app.services.traffic import collect_once
 from app.timeutil import now_local
 
@@ -35,6 +36,7 @@ def init_db() -> None:
         else:
             admin.password_hash = hash_admin_password(settings.admin_password)
         db.commit()
+        seed_clash(db)
     finally:
         db.close()
 
@@ -82,6 +84,8 @@ app.add_middleware(
 )
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(clash.router)
+app.include_router(subscribe.router)
 
 
 @app.get("/api/health")

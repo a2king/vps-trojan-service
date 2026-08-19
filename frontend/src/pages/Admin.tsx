@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { Overview, User } from '../api'
 import { api } from '../api'
 import { UserModal } from '../components/UserModal'
+import { AdminNav } from '../components/AdminNav'
 import { formatLastSeen, formatPair } from '../lib/format'
 
 export function AdminPage() {
@@ -68,26 +69,9 @@ export function AdminPage() {
     }
   }
 
-  function logout() {
-    localStorage.removeItem('token')
-    localStorage.removeItem('username')
-    navigate('/admin/login', { replace: true })
-  }
-
   return (
     <div className="admin-shell">
-      <header className="admin-top">
-        <div className="admin-brand">
-          <b>Trojan Admin</b>
-          <span>{domain || '管理面板'}</span>
-        </div>
-        <div className="admin-top-actions">
-          <span>{username}</span>
-          <button className="btn ghost" type="button" onClick={logout}>
-            退出
-          </button>
-        </div>
-      </header>
+      <AdminNav username={username} domain={domain} />
 
       <main className="admin-main">
         <div className="kpi-row">

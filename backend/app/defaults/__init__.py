@@ -1,0 +1,3 @@
+from .clash_defaults import DEFAULT_CLASH_SETTINGS, DEFAULT_RULES
+
+__all__ = ["DEFAULT_CLASH_SETTINGS", "DEFAULT_RULES"]

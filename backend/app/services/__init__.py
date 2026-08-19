@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import Account, TrojanUser
 from app.schemas import UserOut
+from app.services.clash import clash_subscribe_url
 from app.timeutil import TZ, now_local, to_iso
 
 settings = get_settings()
@@ -41,6 +42,7 @@ def to_user_out(
         name=account.name,
         password=account.password,
         share_uri=share_uri(account.password, account.name),
+        clash_subscribe_url=clash_subscribe_url(account.password),
         enabled=bool(account.enabled),
         remark=account.remark or "",
         created_at=to_iso(account.created_at) or created.isoformat(),

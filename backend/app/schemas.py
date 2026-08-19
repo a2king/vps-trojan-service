@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -38,6 +40,7 @@ class UserOut(BaseModel):
     name: str
     password: str
     share_uri: str
+    clash_subscribe_url: str
     enabled: bool
     remark: str
     created_at: str
@@ -58,3 +61,38 @@ class Overview(BaseModel):
     today_upload: int
     month_download: int
     month_upload: int
+
+
+class ClashRuleOut(BaseModel):
+    id: int
+    line: str
+    sort_order: int
+
+
+class ClashRuleCreate(BaseModel):
+    line: str = Field(min_length=3, max_length=1024)
+
+
+class ClashReorder(BaseModel):
+    ids: list[int]
+
+
+class ClashImportedRule(BaseModel):
+    line: str
+    selected: bool = True
+
+
+class ClashImportPreview(BaseModel):
+    total: int
+    duplicated: int
+    invalid: list[str]
+    new_rules: list[ClashImportedRule]
+
+
+class ClashImportConfirm(BaseModel):
+    yaml: str | None = None
+    rules: list[str] | None = None
+
+
+class ClashSettingsOut(BaseModel):
+    settings: dict[str, Any]

@@ -3,6 +3,7 @@ export type User = {
   name: string
   password: string
   share_uri: string
+  clash_subscribe_url: string
   enabled: boolean
   remark: string
   created_at: string
@@ -29,6 +30,36 @@ export type TrafficPoint = {
   period: string
   download: number
   upload: number
+}
+
+export type ClashRule = {
+  id: number
+  line: string
+  sort_order: number
+}
+
+export type ClashSettings = {
+  node_name?: string
+  mixed_port?: number
+  socks_port?: number
+  allow_lan?: boolean
+  bind_address?: string
+  mode?: string
+  log_level?: string
+  external_controller?: string
+  udp?: boolean
+  alpn?: string[]
+  dns?: Record<string, unknown>
+  proxy_groups?: { name: string; type: string; proxies: string[] }[]
+  cfw_bypass?: string[]
+  cfw_latency_timeout?: number
+}
+
+export type ClashImportPreview = {
+  total: number
+  duplicated: number
+  invalid: string[]
+  new_rules: { line: string; selected: boolean }[]
 }
 
 function detailMessage(detail: unknown): string {
@@ -90,4 +121,26 @@ export const api = {
   deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
   traffic: (id: number, granularity: 'day' | 'month') =>
     request<TrafficPoint[]>(`/api/users/${id}/traffic?granularity=${granularity}`),
+  clashSettings: () => request<{ settings: ClashSettings }>('/api/clash/settings'),
+  saveClashSettings: (settings: ClashSettings) =>
+    request<{ settings: ClashSettings }>('/api/clash/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ settings }),
+    }),
+  clashRules: (q = '') =>
+    request<ClashRule[]>(`/api/clash/rules${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  createClashRule: (line: string) =>
+    request<ClashRule>('/api/clash/rules', { method: 'POST', body: JSON.stringify({ line }) }),
+  updateClashRule: (id: number, line: string) =>
+    request<ClashRule>(`/api/clash/rules/${id}`, { method: 'PATCH', body: JSON.stringify({ line }) }),
+  deleteClashRule: (id: number) => request<void>(`/api/clash/rules/${id}`, { method: 'DELETE' }),
+  reorderClashRules: (ids: number[]) =>
+    request<ClashRule[]>('/api/clash/rules/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  previewClashImport: (yaml: string) =>
+    request<ClashImportPreview>('/api/clash/rules/import/preview', {
+      method: 'POST',
+      body: JSON.stringify({ yaml }),
+    }),
+  confirmClashImport: (rules: string[]) =>
+    request<ClashRule[]>('/api/clash/rules/import', { method: 'POST', body: JSON.stringify({ rules }) }),
 }

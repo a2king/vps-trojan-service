@@ -4,6 +4,7 @@ import { HomePage } from './pages/Home'
 
 const LoginPage = lazy(() => import('./pages/Login').then((mod) => ({ default: mod.LoginPage })))
 const AdminPage = lazy(() => import('./pages/Admin').then((mod) => ({ default: mod.AdminPage })))
+const RulesPage = lazy(() => import('./pages/Rules').then((mod) => ({ default: mod.RulesPage })))
 
 function Boot({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="login-page">加载中…</div>}>{children}</Suspense>
@@ -27,6 +28,14 @@ export function App() {
           element={
             <Boot>
               <AdminPage />
+            </Boot>
+          }
+        />
+        <Route
+          path="/admin/rules"
+          element={
+            <Boot>
+              <RulesPage />
             </Boot>
           }
         />

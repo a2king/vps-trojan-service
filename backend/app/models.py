@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -59,3 +59,18 @@ class TrafficSnapshot(Base):
     download_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     upload_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     collected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
+class ClashSetting(Base):
+    __tablename__ = "clash_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    data_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class ClashRule(Base):
+    __tablename__ = "clash_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    line: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
