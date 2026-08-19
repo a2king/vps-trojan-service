@@ -61,6 +61,8 @@ function CopyBlock({ value, label, onCopied }: CopyBlockProps) {
     </div>
   )
 }
+
+type Props = {
   user: User
   onClose: () => void
   onChanged: (user: User) => void
