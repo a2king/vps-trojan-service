@@ -228,6 +228,7 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                 <XAxis dataKey="label" tick={{ fill: '#6e6e73', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v: number) => formatBytes(v)} tick={{ fill: '#6e6e73', fontSize: 11 }} width={72} axisLine={false} tickLine={false} />
                 <Tooltip
+                  cursor={false}
                   isAnimationActive={false}
                   allowEscapeViewBox={{ x: false, y: false }}
                   wrapperStyle={{ outline: 'none', pointerEvents: 'none', zIndex: 2 }}
@@ -235,8 +236,8 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                   contentStyle={{ background: '#fff', border: '0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', color: '#1d1d1f' }}
                 />
                 <Legend />
-                <Bar dataKey="download" name="进流量" fill="#0071e3" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="upload" name="出流量" fill="#34c759" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="download" name="进流量" fill="#0071e3" radius={[6, 6, 0, 0]} activeBar={false} />
+                <Bar dataKey="upload" name="出流量" fill="#34c759" radius={[6, 6, 0, 0]} activeBar={false} />
               </BarChart>
             </ResponsiveContainer>
             <p className="num" style={{ color: 'var(--admin-muted)', marginTop: 12 }}>
