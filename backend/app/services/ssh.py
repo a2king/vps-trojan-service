@@ -1,0 +1,285 @@
+from __future__ import annotations
+
+import io
+import logging
+import select
+import socket
+import threading
+import time
+from pathlib import Path
+from typing import Callable
+
+import paramiko
+from paramiko.rsakey import RSAKey
+from paramiko.ed25519key import Ed25519Key
+
+from app.config import get_settings
+
+logger = logging.getLogger("trojan-admin")
+settings = get_settings()
+
+OnLine = Callable[[str], None]
+
+
+def ssh_dir() -> Path:
+    path = settings.sqlite_path.parent / "ssh"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def private_key_path() -> Path:
+    return ssh_dir() / "id_ed25519"
+
+
+def public_key_path() -> Path:
+    return ssh_dir() / "id_ed25519.pub"
+
+
+def ensure_host_key() -> tuple[Path, str]:
+    priv = private_key_path()
+    pub = public_key_path()
+    if not priv.is_file():
+        try:
+            key: paramiko.PKey = Ed25519Key.generate()
+        except Exception:
+            key = RSAKey.generate(2048)
+        key.write_private_key_file(str(priv))
+        priv.chmod(0o600)
+        pub.write_text(f"{key.get_name()} {key.get_base64()} trojan-admin\n", encoding="utf-8")
+        pub.chmod(0o644)
+    return priv, public_key_path().read_text(encoding="utf-8").strip()
+
+
+def _load_private_key() -> paramiko.PKey:
+    ensure_host_key()
+    path = str(private_key_path())
+    try:
+        return Ed25519Key.from_private_key_file(path)
+    except Exception:
+        return RSAKey.from_private_key_file(path)
+
+
+def connect(
+    host: str,
+    port: int,
+    username: str,
+    *,
+    password: str | None = None,
+    timeout: int = 20,
+) -> paramiko.SSHClient:
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    kwargs: dict = {
+        "hostname": host,
+        "port": int(port or 22),
+        "username": username or "root",
+        "timeout": timeout,
+        "allow_agent": False,
+        "look_for_keys": False,
+    }
+    if password:
+        kwargs["password"] = password
+    else:
+        kwargs["pkey"] = _load_private_key()
+    client.connect(**kwargs)
+    return client
+
+
+def install_authorized_key(client: paramiko.SSHClient, public_key: str) -> None:
+    key = public_key.strip()
+    remote = (
+        "python3 - <<'PY'\n"
+        "from pathlib import Path\n"
+        f"key = {key!r}\n"
+        "ssh = Path.home() / '.ssh'\n"
+        "ssh.mkdir(mode=0o700, exist_ok=True)\n"
+        "auth = ssh / 'authorized_keys'\n"
+        "text = auth.read_text(encoding='utf-8') if auth.exists() else ''\n"
+        "lines = [line.strip() for line in text.splitlines() if line.strip()]\n"
+        "if key not in lines:\n"
+        "    lines.append(key)\n"
+        "auth.write_text('\\n'.join(lines) + '\\n', encoding='utf-8')\n"
+        "auth.chmod(0o600)\n"
+        "ssh.chmod(0o700)\n"
+        "print('ok')\n"
+        "PY\n"
+    )
+    try:
+        run(client, remote)
+    except RuntimeError:
+        quoted = key.replace("'", "'\"'\"'")
+        run(
+            client,
+            "mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && "
+            f"grep -Fqx '{quoted}' ~/.ssh/authorized_keys || printf '%s\\n' '{quoted}' >> ~/.ssh/authorized_keys",
+        )
+
+
+def run(client: paramiko.SSHClient, command: str, timeout: int = 60) -> str:
+    stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
+    out = stdout.read().decode("utf-8", errors="replace")
+    err = stderr.read().decode("utf-8", errors="replace")
+    code = stdout.channel.recv_exit_status()
+    if code != 0:
+        raise RuntimeError((err or out or f"exit {code}").strip())
+    return out
+
+
+def run_logged(client: paramiko.SSHClient, command: str, on_line: OnLine, timeout: int = 1800) -> int:
+    transport = client.get_transport()
+    if transport is None:
+        raise RuntimeError("SSH 连接已断开")
+    channel = transport.open_session()
+    channel.settimeout(timeout)
+    channel.exec_command(command)
+    buffer = ""
+    deadline = time.time() + timeout
+    while True:
+        if time.time() > deadline:
+            channel.close()
+            raise TimeoutError("远程命令超时")
+        if channel.recv_ready():
+            buffer += channel.recv(4096).decode("utf-8", errors="replace")
+            buffer = _flush_lines(buffer, on_line)
+        if channel.recv_stderr_ready():
+            buffer += channel.recv_stderr(4096).decode("utf-8", errors="replace")
+            buffer = _flush_lines(buffer, on_line)
+        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+            break
+        time.sleep(0.05)
+    if buffer.strip():
+        on_line(buffer.rstrip("\n"))
+    return int(channel.recv_exit_status())
+
+
+def _flush_lines(buffer: str, on_line: OnLine) -> str:
+    while "\n" in buffer:
+        line, buffer = buffer.split("\n", 1)
+        text = line.rstrip("\r")
+        if text:
+            on_line(text)
+    return buffer
+
+
+def sftp_put_bytes(client: paramiko.SSHClient, data: bytes, remote_path: str) -> None:
+    sftp = client.open_sftp()
+    try:
+        sftp.putfo(io.BytesIO(data), remote_path)
+    finally:
+        sftp.close()
+
+
+class ReverseTunnel(threading.Thread):
+    def __init__(self, host: str, port: int, username: str, remote_port: int, local_host: str, local_port: int) -> None:
+        super().__init__(daemon=True, name=f"tunnel-{host}:{remote_port}")
+        self.host = host
+        self.port = port
+        self.username = username
+        self.remote_port = remote_port
+        self.local_host = local_host
+        self.local_port = local_port
+        self._stop = threading.Event()
+        self.client: paramiko.SSHClient | None = None
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self.client is not None:
+            try:
+                self.client.close()
+            except Exception:
+                pass
+
+    def run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                self._loop()
+            except Exception:
+                logger.exception("反向隧道断开 %s:%s", self.host, self.port)
+            if self._stop.is_set():
+                break
+            time.sleep(5)
+
+    def _loop(self) -> None:
+        client = connect(self.host, self.port, self.username, timeout=20)
+        self.client = client
+        transport = client.get_transport()
+        if transport is None:
+            raise RuntimeError("SSH transport 为空")
+        transport.set_keepalive(30)
+        transport.request_port_forward("127.0.0.1", self.remote_port)
+        logger.info("已建立反向隧道 %s -> 127.0.0.1:%s", self.host, self.local_port)
+        while not self._stop.is_set() and transport.is_active():
+            channel = transport.accept(1)
+            if channel is None:
+                continue
+            threading.Thread(target=self._forward, args=(channel,), daemon=True).start()
+        try:
+            transport.cancel_port_forward("127.0.0.1", self.remote_port)
+        except Exception:
+            pass
+        client.close()
+
+    def _forward(self, channel: paramiko.Channel) -> None:
+        try:
+            sock = socket.create_connection((self.local_host, self.local_port), timeout=10)
+        except OSError:
+            channel.close()
+            return
+        try:
+            while not self._stop.is_set():
+                readable, _, _ = select.select([sock, channel], [], [], 1)
+                if sock in readable:
+                    data = sock.recv(32768)
+                    if not data:
+                        break
+                    channel.sendall(data)
+                if channel in readable:
+                    data = channel.recv(32768)
+                    if not data:
+                        break
+                    sock.sendall(data)
+        except Exception:
+            pass
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
+            try:
+                channel.close()
+            except Exception:
+                pass
+
+
+_tunnels: dict[str, ReverseTunnel] = {}
+_tunnel_lock = threading.Lock()
+
+
+def start_tunnel(vps_id: str, host: str, port: int, username: str) -> None:
+    stop_tunnel(vps_id)
+    tunnel = ReverseTunnel(
+        host=host,
+        port=port,
+        username=username,
+        remote_port=settings.trojan_mysql_port,
+        local_host=settings.trojan_mysql_host,
+        local_port=settings.trojan_mysql_port,
+    )
+    with _tunnel_lock:
+        _tunnels[vps_id] = tunnel
+    tunnel.start()
+
+
+def stop_tunnel(vps_id: str) -> None:
+    with _tunnel_lock:
+        tunnel = _tunnels.pop(vps_id, None)
+    if tunnel is not None:
+        tunnel.stop()
+
+
+def stop_all_tunnels() -> None:
+    with _tunnel_lock:
+        items = list(_tunnels.items())
+        _tunnels.clear()
+    for _vps_id, tunnel in items:
+        tunnel.stop()

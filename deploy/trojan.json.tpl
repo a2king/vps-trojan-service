@@ -35,7 +35,7 @@
         "server_addr": "127.0.0.1",
         "server_port": 13306,
         "database": "trojan",
-        "username": "trojan",
+        "username": "__MYSQL_USERNAME__",
         "password": ""
     }
 }

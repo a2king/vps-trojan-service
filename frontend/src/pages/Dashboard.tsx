@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { SystemDisk, SystemInfo } from '../api'
+import type { SystemDisk, SystemInfo, VpsNode } from '../api'
 import { api } from '../api'
 import { formatBytes, formatDateTime, formatUptime } from '../lib/format'
 
@@ -33,21 +33,33 @@ function primaryDisk(disks: SystemDisk[]): SystemDisk | null {
 export function DashboardPage() {
   const [info, setInfo] = useState<SystemInfo | null>(null)
   const [error, setError] = useState('')
+  const [nodes, setNodes] = useState<VpsNode[]>([])
+  const [vpsId, setVpsId] = useState('')
 
-  async function refresh() {
-    const data = await api.system()
+  async function refresh(id = vpsId) {
+    const data = await api.system(id || undefined)
     setInfo(data)
   }
 
   useEffect(() => {
     document.title = '系统看板'
+    api.vps()
+      .then((list) => {
+        setNodes(list)
+        setVpsId((prev) => prev || list.find((item) => item.is_local)?.id || list[0]?.id || '')
+      })
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     let timer = 0
-    refresh()
+    setError('')
+    refresh(vpsId)
       .then(() => {
         if (cancelled) return
         timer = window.setInterval(() => {
-          refresh().catch(() => undefined)
+          refresh(vpsId).catch(() => undefined)
         }, 5000)
       })
       .catch((err: unknown) => {
@@ -57,7 +69,7 @@ export function DashboardPage() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [])
+  }, [vpsId])
 
   const disk = info ? primaryDisk(info.disks) : null
   const cores = info
@@ -89,6 +101,24 @@ export function DashboardPage() {
   return (
     <main className="admin-main">
       {error ? <p className="error">{error}</p> : null}
+
+      {nodes.length > 1 ? (
+        <div className="tabs dash-switch">
+          {nodes.map((item) => (
+            <button
+              key={item.id}
+              className={`tab ${vpsId === item.id ? 'on' : ''}`}
+              type="button"
+              onClick={() => {
+                setInfo(null)
+                setVpsId(item.id)
+              }}
+            >
+              {item.name || item.id}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="usage-row">
         <section className="panel usage-card">

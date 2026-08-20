@@ -1,0 +1,15 @@
+[Unit]
+Description=Trojan MySQL reverse tunnel to %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/var/lib/trojan-admin/tunnels/%i.env
+Environment=AUTOSSH_GATETIME=0
+ExecStart=/usr/bin/autossh -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=yes -o IdentitiesOnly=yes -i ${SSH_KEY} -R 127.0.0.1:${REMOTE_PORT}:${LOCAL_HOST}:${LOCAL_PORT} -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST}
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

@@ -56,6 +56,7 @@ class UserOut(BaseModel):
     today_upload: int
     month_download: int
     month_upload: int
+    group_nodes: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class Overview(BaseModel):
@@ -151,3 +152,46 @@ class ClashImportConfirm(BaseModel):
 
 class ClashSettingsOut(BaseModel):
     settings: dict[str, Any]
+
+
+class GroupNodesIn(BaseModel):
+    group_name: str = Field(min_length=1, max_length=128)
+    vps_ids: list[str] = Field(default_factory=list)
+
+
+class UserNodesUpdate(BaseModel):
+    groups: list[GroupNodesIn]
+
+
+class VpsOut(BaseModel):
+    id: str
+    name: str
+    ssh_host: str
+    ssh_port: int
+    ssh_user: str
+    is_local: bool
+    hidden: bool
+    status: str
+    last_error: str
+    created_at: str
+
+
+class VpsCreate(BaseModel):
+    id: str = Field(min_length=1, max_length=255, description="节点域名")
+    ssh_host: str = Field(min_length=1, max_length=255)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
+    ssh_user: str = Field(default="root", min_length=1, max_length=64)
+    ssh_password: str = Field(min_length=1, max_length=256)
+    name: str = Field(default="", max_length=128)
+    hidden: bool = False
+
+
+class VpsUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=128)
+    hidden: bool | None = None
+
+
+class VpsLogOut(BaseModel):
+    id: str
+    status: str
+    log: str

@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_admin
-from app.models import Account, AccountIp, Admin, TrafficDaily, TrafficSnapshot, TrojanUser
-from app.schemas import Overview, PasswordReset, TrafficPoint, UserCreate, UserIpOut, UserOut, UserUpdate
+from app.models import Account, AccountGroupVps, AccountIp, Admin, TrafficDaily, TrafficSnapshot, TrojanUser
+from app.schemas import Overview, PasswordReset, TrafficPoint, UserCreate, UserIpOut, UserNodesUpdate, UserOut, UserUpdate
 from app.security import generate_password, sha224_hex
 from app.services import get_trojan_user, set_trojan_enabled, to_user_out
 from app.services.ips import list_account_ips
+from app.services.nodes import assign_default_nodes, replace_group_nodes
 from app.services.traffic import daily_map, month_start, month_totals, overview_stats, series_daily, series_monthly
 from app.timeutil import now_local, to_iso
 
@@ -34,6 +35,7 @@ def _stats_for_accounts(db: Session, accounts: list[Account]) -> list[UserOut]:
                 today_upload=int(today_row.upload_bytes) if today_row else 0,
                 month_download=month[0],
                 month_upload=month[1],
+                db=db,
             )
         )
     return result
@@ -93,6 +95,7 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)) -> UserOut:
             collected_at=now_local(),
         )
     )
+    assign_default_nodes(db, account.id)
     db.commit()
     db.refresh(account)
     return _stats_for_accounts(db, [account])[0]
@@ -156,6 +159,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
     db.query(TrafficDaily).filter(TrafficDaily.account_id == account.id).delete()
     db.query(TrafficSnapshot).filter(TrafficSnapshot.account_id == account.id).delete()
     db.query(AccountIp).filter(AccountIp.account_id == account.id).delete()
+    db.query(AccountGroupVps).filter(AccountGroupVps.account_id == account.id).delete()
     if trojan is not None:
         db.delete(trojan)
     db.delete(account)
@@ -181,3 +185,10 @@ def user_ips(user_id: int, db: Session = Depends(get_db)) -> list[UserIpOut]:
         UserIpOut(ip=row.ip, last_seen_at=to_iso(row.last_seen_at) or "")
         for row in rows
     ]
+
+
+@router.put("/users/{user_id}/nodes", response_model=UserOut)
+def update_user_nodes(user_id: int, body: UserNodesUpdate, db: Session = Depends(get_db)) -> UserOut:
+    account = _get_account(db, user_id)
+    replace_group_nodes(db, account.id, [(item.group_name, item.vps_ids) for item in body.groups])
+    return _stats_for_accounts(db, [account])[0]

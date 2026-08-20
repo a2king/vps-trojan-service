@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { TrafficPoint, User, UserIp } from '../api'
+import type { TrafficPoint, User, UserIp, VpsNode } from '../api'
 import { api } from '../api'
 import { copyText, formatBytes, formatDateTime, formatLastSeen, formatPair } from '../lib/format'
 
@@ -76,10 +76,26 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
   const [points, setPoints] = useState<TrafficPoint[]>([])
   const [ips, setIps] = useState<UserIp[]>([])
   const [busy, setBusy] = useState(false)
+  const [nodes, setNodes] = useState<VpsNode[]>([])
+  const [groupNames, setGroupNames] = useState<string[]>([])
+  const [groupNodes, setGroupNodes] = useState<Record<string, string[]>>(user.group_nodes || {})
 
   useEffect(() => {
     setCurrent(user)
+    setGroupNodes(user.group_nodes || {})
   }, [user])
+
+  useEffect(() => {
+    Promise.all([api.vps(), api.clashSettings()])
+      .then(([list, profile]) => {
+        setNodes(list)
+        const names = (profile.settings.proxy_groups || [])
+          .filter((item) => (item.proxies || []).includes('__NODE__'))
+          .map((item) => item.name)
+        setGroupNames(names)
+      })
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -134,6 +150,34 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
       toast('密码已重置')
     } catch (err) {
       toast(err instanceof Error ? err.message : '操作失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function toggleNode(group: string, vpsId: string) {
+    setGroupNodes((prev) => {
+      const currentIds = prev[group] || []
+      const next = currentIds.includes(vpsId)
+        ? currentIds.filter((item) => item !== vpsId)
+        : [...currentIds, vpsId]
+      return { ...prev, [group]: next }
+    })
+  }
+
+  async function saveNodes() {
+    setBusy(true)
+    try {
+      const names = groupNames.length ? groupNames : Object.keys(groupNodes)
+      const next = await api.saveUserNodes(
+        current.id,
+        names.map((name) => ({ group_name: name, vps_ids: groupNodes[name] || [] })),
+      )
+      setCurrent(next)
+      onChanged(next)
+      toast('节点策略已保存')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
     } finally {
       setBusy(false)
     }
@@ -201,6 +245,35 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                 <CopyBlock value={current.share_uri} label="链接" onCopied={toast} />
               </div>
             </div>
+            {nodes.length > 0 && groupNames.length > 0 ? (
+              <div className="group-nodes">
+                <em>策略组节点</em>
+                {groupNames.map((group) => (
+                  <div key={group}>
+                    <strong>{group}</strong>
+                    <div className="node-picks">
+                      {nodes.map((item) => (
+                        <label key={item.id} className="node-pick">
+                          <input
+                            type="checkbox"
+                            checked={(groupNodes[group] || []).includes(item.id)}
+                            onChange={() => toggleNode(group, item.id)}
+                          />
+                          <span>
+                            {item.name || item.id}
+                            {item.hidden ? ' · 高级' : ''}
+                            {item.is_local ? ' · 本机' : ''}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <button className="btn primary" type="button" disabled={busy} onClick={saveNodes}>
+                  保存节点
+                </button>
+              </div>
+            ) : null}
             <div className="actions">
               <button className="btn" type="button" disabled={busy} onClick={toggle}>
                 {current.enabled ? '禁用访问' : '启用访问'}

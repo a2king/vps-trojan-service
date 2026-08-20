@@ -5,6 +5,7 @@ import { AdminPage } from './pages/Admin'
 import { DashboardPage } from './pages/Dashboard'
 import { LoginPage } from './pages/Login'
 import { RulesPage } from './pages/Rules'
+import { NodesPage } from './pages/Nodes'
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="users" element={<AdminPage />} />
+          <Route path="nodes" element={<NodesPage />} />
           <Route path="rules" element={<RulesPage />} />
         </Route>
         <Route path="/admin/*" element={<Navigate to="/admin" replace />} />

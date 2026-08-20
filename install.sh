@@ -56,6 +56,7 @@ repl = {
     "__INSTALL_DIR__": os.environ.get("INSTALL_DIR", ""),
     "__NGINX_USER__": os.environ.get("NGINX_USER", "www-data"),
     "__TROJAN_FALLBACK_PASSWORD__": os.environ.get("TROJAN_FALLBACK_PASSWORD", ""),
+    "__MYSQL_USERNAME__": os.environ.get("MYSQL_USERNAME", "trojan"),
 }
 for key, value in repl.items():
     text = text.replace(key, value)
@@ -534,7 +535,8 @@ install_all() {
 
   JWT_SECRET="$(rand_hex 24)"
   TROJAN_FALLBACK_PASSWORD="$(rand_hex 16)"
-  export TROJAN_FALLBACK_PASSWORD JWT_SECRET DOMAIN INSTALL_DIR NGINX_USER
+  MYSQL_USERNAME="${MYSQL_USERNAME:-trojan}"
+  export TROJAN_FALLBACK_PASSWORD JWT_SECRET DOMAIN INSTALL_DIR NGINX_USER MYSQL_USERNAME
 
   install_packages
   install_node

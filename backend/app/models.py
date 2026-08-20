@@ -89,6 +89,33 @@ class AccountIp(Base):
 class LogCursor(Base):
     __tablename__ = "log_cursors"
 
-    name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), primary_key=True)
     inode: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     offset: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+
+class Vps(Base):
+    """节点。主键为域名。"""
+
+    __tablename__ = "vps"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    ssh_host: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    ssh_port: Mapped[int] = mapped_column(Integer, nullable=False, default=22)
+    ssh_user: Mapped[str] = mapped_column(String(64), nullable=False, default="root")
+    is_local: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    hidden: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    last_error: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
+class AccountGroupVps(Base):
+    __tablename__ = "account_group_vps"
+    __table_args__ = (UniqueConstraint("account_id", "group_name", "vps_id", name="uk_account_group_vps"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    vps_id: Mapped[str] = mapped_column(String(255), ForeignKey("vps.id", ondelete="CASCADE"), nullable=False, index=True)
