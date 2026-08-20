@@ -1,0 +1,6 @@
+trojan-gfw/trojan v1.16.0 (linux-amd64)
+https://github.com/trojan-gfw/trojan/releases/download/v1.16.0/trojan-1.16.0-linux-amd64.tar.xz
+License: GPLv3
+
+主节点 install.sh 与子节点 install-node.sh 都从这个目录解压安装，安装过程不再访问 GitHub。
+若需更换版本，把对应的 trojan-*-linux-amd64.tar.xz 放到本目录并更新 VERSION。

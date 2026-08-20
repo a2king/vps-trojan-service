@@ -5,6 +5,7 @@ import logging
 import secrets
 import tarfile
 import threading
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -26,12 +27,16 @@ def _pack_payload() -> bytes:
     root = repo_root()
     deploy = root / "deploy"
     script = root / "install-node.sh"
+    vendor = root / "vendor" / "trojan"
     if not deploy.is_dir() or not script.is_file():
         raise RuntimeError("缺少 deploy/ 或 install-node.sh，无法远程安装")
+    if not vendor.is_dir() or not any(vendor.glob("trojan-*-linux-amd64.tar.xz")):
+        raise RuntimeError("缺少 vendor/trojan 预置包，无法远程安装")
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
         tar.add(deploy, arcname="deploy")
         tar.add(script, arcname="install-node.sh")
+        tar.add(vendor, arcname="vendor/trojan")
     return buffer.getvalue()
 
 
