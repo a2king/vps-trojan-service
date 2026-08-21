@@ -22,7 +22,19 @@ function Meter({ percent, label }: { percent: number; label?: string }) {
   )
 }
 
-function primaryDisk(disks: SystemDisk[]): SystemDisk | null {
+function statusText(item: VpsNode): string {
+  if (item.is_local) return '本机'
+  if (item.status === 'online') return '在线'
+  if (item.status === 'installing') return '安装中'
+  if (item.status === 'error') return '失败'
+  return '待处理'
+}
+
+function statusDot(item: VpsNode): string {
+  if (item.status === 'online' || item.is_local) return ''
+  if (item.status === 'error') return 'off'
+  return 'warn'
+}
   return (
     disks.find((item) => item.mountpoint === '/' || /^[cC]:\\?$/.test(item.mountpoint)) ||
     disks[0] ||
@@ -37,8 +49,12 @@ export function DashboardPage() {
   const [vpsId, setVpsId] = useState('')
 
   async function refresh(id = vpsId) {
-    const data = await api.system(id || undefined)
+    const [data, list] = await Promise.all([api.system(id || undefined), api.vps().catch(() => nodes)])
     setInfo(data)
+    setNodes(list)
+    if (!id && list.length) {
+      setVpsId(list.find((item) => item.is_local)?.id || list[0].id)
+    }
   }
 
   useEffect(() => {
@@ -99,26 +115,36 @@ export function DashboardPage() {
     : []
 
   return (
-    <main className="admin-main">
-      {error ? <p className="error">{error}</p> : null}
-
-      {nodes.length > 1 ? (
-        <div className="tabs dash-switch">
-          {nodes.map((item) => (
-            <button
-              key={item.id}
-              className={`tab ${vpsId === item.id ? 'on' : ''}`}
-              type="button"
-              onClick={() => {
-                setInfo(null)
-                setVpsId(item.id)
-              }}
-            >
-              {item.name || item.id}
-            </button>
-          ))}
-        </div>
+    <main className={`admin-main${nodes.length ? ' dash-page' : ''}`}>
+      {nodes.length ? (
+        <aside className="node-dock">
+          <div className="node-dock-head">节点</div>
+          <div className="node-dock-list scroll-inset">
+            {nodes.map((item) => (
+              <button
+                key={item.id}
+                className={`node-dock-item${vpsId === item.id ? ' on' : ''}`}
+                type="button"
+                onClick={() => {
+                  if (item.id === vpsId) return
+                  setInfo(null)
+                  setError('')
+                  setVpsId(item.id)
+                }}
+              >
+                <span className="node-dock-name">{item.name || item.id}</span>
+                <span className="node-dock-meta">
+                  <i className={`dot ${statusDot(item)}`} />
+                  {statusText(item)}
+                  {item.hidden ? ' · 高级' : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
       ) : null}
+
+      {error ? <p className="error">{error}</p> : null}
 
       <div className="usage-row">
         <section className="panel usage-card">
