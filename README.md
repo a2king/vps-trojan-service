@@ -55,7 +55,7 @@ sudo bash install.sh
 
 安装过程会：
 
-1. 安装 nginx、uv、Node、Trojan、证书
+1. 安装 nginx、uv、Node、Trojan（使用仓库 `vendor/trojan` 预置包）、证书
 2. `npm run build` 打包前端
 3. 把 `/usr/share/nginx/html` 软连接到 `frontend/dist`
 4. 写入 nginx：`/`、`/admin` 走前端，`/api/` 反代到后端
@@ -68,14 +68,7 @@ sudo bash install.sh
 
 在后台创建用户后，把详情弹窗里的 `trojan://` 链接导入客户端即可。
 
-如果 GitHub 下载 Trojan 很慢，可先导出代理再安装：
-
-```bash
-export GITHUB_PROXY=https://ghfast.top/
-sudo -E bash install.sh
-```
-
-脚本菜单还提供卸载和证书修复。
+Trojan 二进制已预置在 `vendor/trojan/`，安装时不再访问 GitHub。脚本菜单还提供卸载和证书修复。
 
 ## 本地开发
 

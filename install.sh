@@ -56,6 +56,7 @@ repl = {
     "__INSTALL_DIR__": os.environ.get("INSTALL_DIR", ""),
     "__NGINX_USER__": os.environ.get("NGINX_USER", "www-data"),
     "__TROJAN_FALLBACK_PASSWORD__": os.environ.get("TROJAN_FALLBACK_PASSWORD", ""),
+    "__MYSQL_USERNAME__": os.environ.get("MYSQL_USERNAME", "trojan"),
 }
 for key, value in repl.items():
     text = text.replace(key, value)
@@ -419,18 +420,27 @@ issue_cert() {
 
 install_trojan_bin() {
   if [[ "$(uname -m)" != "x86_64" ]]; then
-    red "当前仅打包了 linux-amd64 的 trojan 官方发布包"
+    red "当前仅打包了 linux-amd64 的 trojan"
     exit 1
   fi
-  green "安装 Trojan…"
-  local tmp latest url proxy
+  local vendor="${INSTALL_DIR}/vendor/trojan"
+  local archive
+  archive="$(ls -1 "${vendor}"/trojan-*-linux-amd64.tar.xz 2>/dev/null | tail -n1 || true)"
+  if [[ -z "${archive}" || ! -f "${archive}" ]]; then
+    red "未找到预置包：${vendor}/trojan-*-linux-amd64.tar.xz"
+    exit 1
+  fi
+  green "安装 Trojan（预置包 $(basename "$archive")）…"
+  local tmp bin
   tmp="$(mktemp -d)"
-  proxy="${GITHUB_PROXY:-}"
-  latest="$(curl -fsSL https://api.github.com/repos/trojan-gfw/trojan/releases/latest | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')"
-  url="${proxy}https://github.com/trojan-gfw/trojan/releases/download/v${latest}/trojan-${latest}-linux-amd64.tar.xz"
-  wget -O "${tmp}/trojan.tar.xz" "$url"
-  tar -xf "${tmp}/trojan.tar.xz" -C "$tmp"
-  install -m 755 "${tmp}/trojan/trojan" /usr/local/bin/trojan
+  tar -xf "${archive}" -C "$tmp"
+  bin="$(find "$tmp" -type f -name trojan | head -n1)"
+  if [[ -z "$bin" || ! -f "$bin" ]]; then
+    red "预置包里没有 trojan 可执行文件"
+    rm -rf "$tmp"
+    exit 1
+  fi
+  install -m 755 "$bin" /usr/local/bin/trojan
   rm -rf "$tmp"
   export TROJAN_FALLBACK_PASSWORD
   render "${INSTALL_DIR}/deploy/trojan.json.tpl" /etc/trojan/config.json
@@ -534,7 +544,8 @@ install_all() {
 
   JWT_SECRET="$(rand_hex 24)"
   TROJAN_FALLBACK_PASSWORD="$(rand_hex 16)"
-  export TROJAN_FALLBACK_PASSWORD JWT_SECRET DOMAIN INSTALL_DIR NGINX_USER
+  MYSQL_USERNAME="${MYSQL_USERNAME:-trojan}"
+  export TROJAN_FALLBACK_PASSWORD JWT_SECRET DOMAIN INSTALL_DIR NGINX_USER MYSQL_USERNAME
 
   install_packages
   install_node

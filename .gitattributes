@@ -1,3 +1,4 @@
+vendor/** binary
 *.sh text eol=lf
 deploy/*.tpl text eol=lf
 deploy/*.service text eol=lf

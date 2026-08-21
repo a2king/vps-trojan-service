@@ -10,6 +10,7 @@ export function AdminNav({ username, domain }: Props) {
   const navigate = useNavigate()
   const onDashboard = location.pathname === '/admin' || location.pathname === '/admin/'
   const onUsers = location.pathname.startsWith('/admin/users')
+  const onNodes = location.pathname.startsWith('/admin/nodes')
   const onRules = location.pathname.startsWith('/admin/rules')
 
   function go(path: string) {
@@ -46,6 +47,15 @@ export function AdminNav({ username, domain }: Props) {
           }}
         >
           用户
+        </Link>
+        <Link
+          className={onNodes ? 'on' : ''}
+          to="/admin/nodes"
+          onPointerDown={(event) => {
+            if (event.button === 0) go('/admin/nodes')
+          }}
+        >
+          节点
         </Link>
         <Link
           className={onRules ? 'on' : ''}

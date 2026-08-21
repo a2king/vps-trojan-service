@@ -249,27 +249,50 @@ def _ensure_groups_for_policies(db: Session, lines: list[str]) -> None:
             row.data_json = blob
 
 
-def _resolve_group_proxies(items: list[Any], node_name: str) -> list[str]:
+def _resolve_group_proxies(items: list[Any], replacements: list[str], fallback: str) -> list[str]:
     resolved: list[str] = []
     seen: set[str] = set()
     for item in items:
-        name = node_name if str(item) == NODE_PLACEHOLDER else str(item)
-        if name in seen:
-            continue
-        seen.add(name)
-        resolved.append(name)
-    return resolved or [node_name]
+        names = replacements if str(item) == NODE_PLACEHOLDER else [str(item)]
+        for name in names:
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            resolved.append(name)
+    return resolved or ([fallback] if fallback else [])
 
 
 def render_clash_yaml(account: Account, db: Session) -> str:
+    from app.services.nodes import group_nodes_map, list_vps, local_vps_id, vps_proxy_name
+
     data = get_clash_settings(db)
-    node_name = str(data.get("node_name") or default_node_name())
     alpn = data.get("alpn") or ["h2", "http/1.1"]
     dns = data.get("dns") or DEFAULT_CLASH_SETTINGS["dns"]
     groups = data.get("proxy_groups") or DEFAULT_CLASH_SETTINGS["proxy_groups"]
     rules = [rule.line for rule in list_rules(db)]
     if not rules:
         rules = list(DEFAULT_RULES)
+
+    all_nodes = list_vps(db)
+    by_id = {item.id: item for item in all_nodes}
+    assignments = group_nodes_map(db, account.id)
+    assigned_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for vps_ids in assignments.values():
+        for vps_id in vps_ids:
+            if vps_id in seen_ids or vps_id not in by_id:
+                continue
+            seen_ids.add(vps_id)
+            assigned_ids.append(vps_id)
+    if not assigned_ids:
+        local_id = local_vps_id()
+        if local_id in by_id:
+            assigned_ids = [local_id]
+        elif all_nodes:
+            assigned_ids = [all_nodes[0].id]
+
+    assigned = [by_id[vps_id] for vps_id in assigned_ids]
+    fallback_name = vps_proxy_name(assigned[0], all_nodes) if assigned else default_node_name()
 
     lines: list[str] = [
         f"mixed-port: {int(data.get('mixed_port') or 7890)}",
@@ -282,24 +305,30 @@ def render_clash_yaml(account: Account, db: Session) -> str:
         "dns:",
         f"  {_flow_map(list(dns.items()))}",
         "proxies:",
-        "  - "
-        + _flow_map(
-            [
-                ("name", node_name),
-                ("type", "trojan"),
-                ("server", settings.domain),
-                ("port", int(settings.trojan_port)),
-                ("alpn", list(alpn)),
-                ("password", account.password),
-                ("udp", bool(data.get("udp", True))),
-            ]
-        ),
-        "",
-        "proxy-groups:",
     ]
+    for node in assigned:
+        proxy_name = vps_proxy_name(node, all_nodes)
+        lines.append(
+            "  - "
+            + _flow_map(
+                [
+                    ("name", proxy_name),
+                    ("type", "trojan"),
+                    ("server", node.id),
+                    ("port", int(settings.trojan_port)),
+                    ("alpn", list(alpn)),
+                    ("password", account.password),
+                    ("udp", bool(data.get("udp", True))),
+                ]
+            )
+        )
+    lines.append("")
+    lines.append("proxy-groups:")
     for group in groups:
         name = str(group.get("name") or "PROXY")
-        proxies = _resolve_group_proxies(list(group.get("proxies") or [NODE_PLACEHOLDER]), node_name)
+        selected_ids = assignments.get(name) or assigned_ids
+        selected_names = [vps_proxy_name(by_id[vps_id], all_nodes) for vps_id in selected_ids if vps_id in by_id]
+        proxies = _resolve_group_proxies(list(group.get("proxies") or [NODE_PLACEHOLDER]), selected_names, fallback_name)
         lines.append(
             "  - "
             + _flow_map(

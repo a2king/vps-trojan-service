@@ -14,6 +14,7 @@ export type User = {
   today_upload: number
   month_download: number
   month_upload: number
+  group_nodes: Record<string, string[]>
 }
 
 export type Overview = {
@@ -110,6 +111,25 @@ export type ClashSettings = {
   cfw_latency_timeout?: number
 }
 
+export type VpsNode = {
+  id: string
+  name: string
+  ssh_host: string
+  ssh_port: number
+  ssh_user: string
+  is_local: boolean
+  hidden: boolean
+  status: string
+  last_error: string
+  created_at: string
+}
+
+export type VpsLog = {
+  id: string
+  status: string
+  log: string
+}
+
 export type ClashImportPreview = {
   total: number
   duplicated: number
@@ -163,7 +183,24 @@ export const api = {
     }),
   me: () => request<{ username: string; domain: string }>('/api/auth/me'),
   overview: () => request<Overview>('/api/overview'),
-  system: () => request<SystemInfo>('/api/system'),
+  system: (vpsId?: string) =>
+    request<SystemInfo>(`/api/system${vpsId ? `?vps_id=${encodeURIComponent(vpsId)}` : ''}`),
+  vps: () => request<VpsNode[]>('/api/vps'),
+  createVps: (payload: {
+    id: string
+    ssh_host: string
+    ssh_port?: number
+    ssh_user?: string
+    ssh_password: string
+    name?: string
+    hidden?: boolean
+  }) => request<VpsNode>('/api/vps', { method: 'POST', body: JSON.stringify(payload) }),
+  updateVps: (id: string, payload: { name?: string; hidden?: boolean }) =>
+    request<VpsNode>(`/api/vps/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteVps: (id: string) => request<void>(`/api/vps/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  vpsLogs: (id: string) => request<VpsLog>(`/api/vps/${encodeURIComponent(id)}/logs`),
+  saveUserNodes: (id: number, groups: { group_name: string; vps_ids: string[] }[]) =>
+    request<User>(`/api/users/${id}/nodes`, { method: 'PUT', body: JSON.stringify({ groups }) }),
   users: () => request<User[]>('/api/users'),
   createUser: (payload: { name: string; password?: string; remark?: string }) =>
     request<User>('/api/users', { method: 'POST', body: JSON.stringify(payload) }),

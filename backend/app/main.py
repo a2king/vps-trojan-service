@@ -8,11 +8,14 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
-from app.models import Account, AccountIp, Admin, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser  # noqa: F401
+from app.models import Account, AccountGroupVps, AccountIp, Admin, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser, Vps  # noqa: F401
 from app.mysql_bridge import create_mysql_server
-from app.routers import auth, clash, subscribe, system, users
+from app.routers import auth, clash, subscribe, system, users, vps
 from app.security import hash_admin_password
 from app.services.clash import seed_clash
+from app.services.node_install import start_online_tunnels
+from app.services.nodes import seed_local_vps
+from app.services.ssh import stop_all_tunnels
 from app.services.traffic import collect_once
 from app.timeutil import now_local
 
@@ -37,6 +40,7 @@ def init_db() -> None:
             admin.password_hash = hash_admin_password(settings.admin_password)
         db.commit()
         seed_clash(db)
+        seed_local_vps(db)
     finally:
         db.close()
 
@@ -67,9 +71,11 @@ async def lifespan(_: FastAPI):
         replace_existing=True,
     )
     scheduler.start()
+    start_online_tunnels()
     job_collect()
     yield
     scheduler.shutdown(wait=False)
+    stop_all_tunnels()
     mysql_server.close()
     await mysql_server.wait_closed()
 
@@ -84,6 +90,7 @@ app.add_middleware(
 )
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(vps.router)
 app.include_router(system.router)
 app.include_router(clash.router)
 app.include_router(subscribe.router)

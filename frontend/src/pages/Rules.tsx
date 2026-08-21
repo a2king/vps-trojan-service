@@ -25,7 +25,6 @@ export function RulesPage() {
   const [settings, setSettings] = useState<ClashSettings | null>(null)
   const [query, setQuery] = useState('')
   const [newLine, setNewLine] = useState('')
-  const [nodeName, setNodeName] = useState('')
   const [mixedPort, setMixedPort] = useState(7890)
   const [socksPort, setSocksPort] = useState(7891)
   const [bypass, setBypass] = useState('')
@@ -47,7 +46,6 @@ export function RulesPage() {
     const [list, profile] = await Promise.all([api.clashRules(), api.clashSettings()])
     setRules(list)
     setSettings(profile.settings)
-    setNodeName(String(profile.settings.node_name || ''))
     setMixedPort(Number(profile.settings.mixed_port || 7890))
     setSocksPort(Number(profile.settings.socks_port || 7891))
     setBypass((profile.settings.cfw_bypass || []).join('\n'))
@@ -124,7 +122,6 @@ export function RulesPage() {
     try {
       const saved = await api.saveClashSettings({
         ...settings,
-        node_name: nodeName.trim(),
         mixed_port: mixedPort,
         socks_port: socksPort,
         cfw_bypass: bypass
@@ -203,10 +200,6 @@ export function RulesPage() {
           </div>
           <div className="settings-grid">
             <label className="field">
-              <span>节点名称</span>
-              <input value={nodeName} onChange={(e) => setNodeName(e.target.value)} placeholder="例如 vps-jp" />
-            </label>
-            <label className="field">
               <span>mixed-port</span>
               <input type="number" value={mixedPort} onChange={(e) => setMixedPort(Number(e.target.value))} />
             </label>
@@ -222,7 +215,7 @@ export function RulesPage() {
           {settings?.proxy_groups?.length ? (
             <p className="settings-hint">
               策略组：{settings.proxy_groups.map((item) => item.name).join(' / ')}
-              。导入规则时若出现新策略名，会自动补一个指向本节点的 select 组。
+              。节点展示名请到「节点」页修改；导入规则时若出现新策略名，会自动补一个指向节点占位符的 select 组。
             </p>
           ) : null}
         </section>
