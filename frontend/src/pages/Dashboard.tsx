@@ -35,6 +35,8 @@ function statusDot(item: VpsNode): string {
   if (item.status === 'error') return 'off'
   return 'warn'
 }
+
+function primaryDisk(disks: SystemDisk[]): SystemDisk | null {
   return (
     disks.find((item) => item.mountpoint === '/' || /^[cC]:\\?$/.test(item.mountpoint)) ||
     disks[0] ||
