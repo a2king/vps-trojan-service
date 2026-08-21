@@ -205,24 +205,24 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
           </button>
         </div>
         <div className="modal-body">
-          <aside className="modal-side">
+          <aside className="modal-side scroll-inset">
             <div className="meta">
-              <div>
+              <div className="meta-inline">
                 <em>状态</em>
                 <span className="badge">
                   <i className={`dot ${current.enabled ? '' : 'off'}`} />
                   {current.enabled ? '允许访问' : '已禁用'}
                 </span>
               </div>
-              <div>
+              <div className="meta-inline">
                 <em>最近使用</em>
                 <span>{formatLastSeen(current.last_seen_at)}</span>
               </div>
-              <div>
+              <div className="meta-inline">
                 <em>创建时间</em>
                 <span>{formatDateTime(current.created_at)}</span>
               </div>
-              <div>
+              <div className="meta-inline">
                 <em>累计流量</em>
                 <span className="num">{formatPair(current.total_download, current.total_upload)}</span>
               </div>
@@ -322,22 +322,24 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
               {ips.length === 0 ? (
                 <p className="settings-hint" style={{ padding: 0 }}>暂无记录。用户连上代理后会出现在这里。</p>
               ) : (
-                <table className="ip-table">
-                  <thead>
-                    <tr>
-                      <th>IP</th>
-                      <th>最近访问</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ips.map((item) => (
-                      <tr key={item.ip}>
-                        <td className="num">{item.ip}</td>
-                        <td>{formatDateTime(item.last_seen_at)}</td>
+                <div className="ip-scroll scroll-inset">
+                  <table className="ip-table">
+                    <thead>
+                      <tr>
+                        <th>IP</th>
+                        <th>最近访问</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {ips.map((item) => (
+                        <tr key={item.ip}>
+                          <td className="num">{item.ip}</td>
+                          <td>{formatDateTime(item.last_seen_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
