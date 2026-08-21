@@ -309,7 +309,7 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 }
 .modal {
   width: min(980px, 100%);
-  max-height: 950px;
+  max-height: 800px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -408,15 +408,29 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 }
 .ip-table tr:last-child td { border-bottom: 0; }
 .meta { display: grid; gap: 10px; margin-bottom: 20px; }
-.meta > div { display: flex; flex-direction: column; gap: 4px; }
-.meta-inline {
-  flex-direction: row;
+.meta > div:not(.meta-kv) { display: flex; flex-direction: column; gap: 4px; }
+.meta-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 16px;
+  row-gap: 10px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+}
+.meta-kv em,
+.meta-kv span,
+.meta-kv .badge,
+.meta-kv .num {
+  font-size: 12px;
+  font-weight: 510;
+  line-height: 1.45;
+}
+.meta-kv span,
+.meta-kv .badge,
+.meta-kv .num {
+  color: #1d1d1f;
+  min-width: 0;
   white-space: nowrap;
 }
-.meta-inline span { min-width: 0; text-align: right; }
 .meta em {
   font-style: normal;
   color: var(--admin-muted);
