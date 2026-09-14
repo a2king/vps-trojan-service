@@ -259,12 +259,44 @@ check_dns() {
   fi
 }
 
+wait_for_apt() {
+  [[ "${PKG:-}" == "apt-get" ]] || return 0
+  local i
+  for i in $(seq 1 90); do
+    if ! pgrep -x apt-get >/dev/null 2>&1 \
+      && ! pgrep -x apt >/dev/null 2>&1 \
+      && ! pgrep -x dpkg >/dev/null 2>&1 \
+      && ! pgrep -x unattended-upgr >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "系统 apt 正忙（常见于新机器自动更新），等待空闲… ${i}/90"
+    sleep 2
+  done
+  red "等待 apt 结束超时。请稍后再装，或先结束占用 apt 的进程。"
+  exit 1
+}
+
+apt_cmd() {
+  local n=0
+  wait_for_apt
+  until apt-get "$@"; do
+    n=$((n + 1))
+    if [[ "$n" -ge 8 ]]; then
+      return 1
+    fi
+    echo "apt 失败，${n}/8 次重试…"
+    wait_for_apt
+    sleep 3
+  done
+}
+
 install_packages() {
   green "安装系统依赖…"
   if [[ "$PKG" == "apt-get" ]]; then
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y nginx curl wget unzip zip tar socat cron python3 xz-utils ca-certificates gnupg logrotate libmariadb3
+    wait_for_apt
+    apt_cmd update -y
+    apt_cmd install -y nginx curl wget unzip zip tar socat cron python3 xz-utils ca-certificates gnupg logrotate libmariadb3
   else
     $PKG install -y nginx curl wget unzip zip tar socat cron python3 xz ca-certificates logrotate mariadb-libs
     if [[ -f /etc/selinux/config ]]; then
@@ -294,7 +326,7 @@ install_node() {
   green "安装 Node.js…"
   if [[ "$PKG" == "apt-get" ]]; then
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    apt-get install -y nodejs
+    apt_cmd install -y nodejs
   else
     curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
     $PKG install -y nodejs
