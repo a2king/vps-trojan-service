@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import logging
+import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
@@ -56,6 +57,17 @@ def job_collect() -> None:
         db.close()
 
 
+def _after_start() -> None:
+    try:
+        start_online_tunnels()
+    except Exception:
+        logger.exception("启动节点隧道失败")
+    try:
+        job_collect()
+    except Exception:
+        logger.exception("启动采集失败")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -71,8 +83,7 @@ async def lifespan(_: FastAPI):
         replace_existing=True,
     )
     scheduler.start()
-    start_online_tunnels()
-    job_collect()
+    threading.Thread(target=_after_start, daemon=True, name="startup-tunnels").start()
     yield
     scheduler.shutdown(wait=False)
     stop_all_tunnels()

@@ -72,20 +72,25 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     let timer = 0
+    let delay = 5000
     setError('')
-    refresh(vpsId)
-      .then(() => {
-        if (cancelled) return
-        timer = window.setInterval(() => {
-          refresh(vpsId).catch(() => undefined)
-        }, 5000)
-      })
-      .catch((err: unknown) => {
+
+    async function tick() {
+      try {
+        await refresh(vpsId)
+        delay = 5000
+        if (!cancelled) setError('')
+      } catch (err: unknown) {
+        delay = Math.min(delay * 2, 30000)
         if (!cancelled) setError(err instanceof Error ? err.message : '加载失败')
-      })
+      }
+      if (!cancelled) timer = window.setTimeout(tick, delay)
+    }
+
+    tick()
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      window.clearTimeout(timer)
     }
   }, [vpsId])
 

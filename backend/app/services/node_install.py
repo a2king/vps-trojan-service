@@ -79,12 +79,13 @@ def try_start_autossh(vps: Vps) -> bool:
         )
         env_path.chmod(0o600)
         name = f"trojan-tunnel@{instance}"
-        subprocess.run(["systemctl", "daemon-reload"], check=False, capture_output=True)
+        subprocess.run(["systemctl", "daemon-reload"], check=False, capture_output=True, timeout=15)
         result = subprocess.run(
             ["systemctl", "enable", "--now", name],
             check=False,
             capture_output=True,
             text=True,
+            timeout=20,
         )
         return result.returncode == 0
     except Exception:
@@ -100,7 +101,7 @@ def try_stop_autossh(vps_id: str) -> None:
         if shutil.which("systemctl") is None:
             return
         name = f"trojan-tunnel@{_unit_instance(vps_id)}"
-        subprocess.run(["systemctl", "disable", "--now", name], check=False, capture_output=True)
+        subprocess.run(["systemctl", "disable", "--now", name], check=False, capture_output=True, timeout=20)
     except Exception:
         return
 
