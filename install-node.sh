@@ -10,6 +10,8 @@ INSTALL_DIR="${INSTALL_DIR:-$SCRIPT_DIR}"
 CERT_DIR="/etc/trojan/certs"
 ACME_WEBROOT="/var/www/acme"
 NODE_HTML="/var/www/node-html"
+# shellcheck source=/dev/null
+source "${INSTALL_DIR}/deploy/select-camouflage.sh"
 
 require_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -267,20 +269,7 @@ write_nginx() {
 }
 
 write_camouflage() {
-  mkdir -p "${NODE_HTML}"
-  find "${NODE_HTML}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-  local src=""
-  if [[ -f "${INSTALL_DIR}/frontend/dist/index.html" ]]; then
-    src="${INSTALL_DIR}/frontend/dist"
-  elif [[ -f "${INSTALL_DIR}/deploy/camouflage/index.html" ]]; then
-    src="${INSTALL_DIR}/deploy/camouflage"
-  fi
-  if [[ -z "$src" ]]; then
-    red "缺少伪装站文件（frontend/dist 或 deploy/camouflage）"
-    exit 1
-  fi
-  cp -a "${src}/." "${NODE_HTML}/"
-  green "已部署伪装站：${NODE_HTML}"
+  deploy_camouflage "${NODE_HTML}"
 }
 
 issue_cert() {

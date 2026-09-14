@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type UIEvent } from 'react'
 import type { VpsNode } from '../api'
 import { api } from '../api'
 import { formatDateTime } from '../lib/format'
@@ -25,6 +25,8 @@ export function NodesPage() {
   const [logNode, setLogNode] = useState<VpsNode | null>(null)
   const [logText, setLogText] = useState('')
   const [logStatus, setLogStatus] = useState('')
+  const logRef = useRef<HTMLPreElement>(null)
+  const stickToBottom = useRef(true)
 
   function notify(message: string) {
     setToast(message)
@@ -42,6 +44,22 @@ export function NodesPage() {
       setError(err instanceof Error ? err.message : '加载失败')
     })
   }, [])
+
+  useEffect(() => {
+    stickToBottom.current = true
+  }, [logNode])
+
+  useEffect(() => {
+    const el = logRef.current
+    if (!el || !stickToBottom.current) return
+    el.scrollTop = el.scrollHeight
+  }, [logText, logNode])
+
+  function onLogScroll(event: UIEvent<HTMLPreElement>) {
+    const el = event.currentTarget
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickToBottom.current = gap < 48
+  }
 
   useEffect(() => {
     if (!logNode) return undefined
@@ -248,7 +266,9 @@ export function NodesPage() {
               {logNode.last_error && (logStatus || logNode.status) === 'error' ? (
                 <p className="error">{logNode.last_error}</p>
               ) : null}
-              <pre className="install-log">{logText || '暂无日志'}</pre>
+              <pre ref={logRef} className="install-log" onScroll={onLogScroll}>
+                {logText || '暂无日志'}
+              </pre>
             </div>
           </div>
         </div>

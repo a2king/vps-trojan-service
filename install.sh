@@ -9,6 +9,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-$SCRIPT_DIR}"
 CERT_DIR="/etc/trojan/certs"
 ACME_WEBROOT="/var/www/acme"
+CAMOUFLAGE_HTML="/var/www/camouflage"
+# shellcheck source=/dev/null
+source "${INSTALL_DIR}/deploy/select-camouflage.sh"
 
 require_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -583,6 +586,7 @@ redeploy() {
   setup_backend
   build_frontend
   link_frontend
+  deploy_camouflage "${CAMOUFLAGE_HTML}"
 
   green "更新 nginx 配置…"
   write_nginx "${INSTALL_DIR}/deploy/nginx.conf.tpl"
@@ -637,6 +641,7 @@ install_all() {
   setup_backend
   build_frontend
   link_frontend
+  deploy_camouflage "${CAMOUFLAGE_HTML}"
   setup_log_retention
   write_nginx "${INSTALL_DIR}/deploy/nginx-bootstrap.conf.tpl"
   issue_cert

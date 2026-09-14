@@ -33,11 +33,12 @@ http {
         }
     }
 
-    # Trojan 把普通 HTTPS 回落到这里。html 目录是 frontend/dist 的软链接。
+    # Trojan 把普通 HTTPS 回落到这里。
+    # 公开首页用伪装站；/admin 与 /assets 仍走管理前端。
     server {
         listen 127.0.0.1:80;
         server_name __DOMAIN__;
-        root /usr/share/nginx/html;
+        root /var/www/camouflage;
         index index.html;
 
         # 后端 FastAPI：管理接口 + Clash 订阅
@@ -59,12 +60,16 @@ http {
             proxy_set_header X-Forwarded-Proto https;
         }
 
-        # 前端管理台（React Router）
         location /admin {
-            try_files $uri $uri/ /index.html;
+            root /usr/share/nginx/html;
+            try_files /index.html =404;
         }
 
-        # 前端伪装首页及其静态资源
+        location /assets/ {
+            root /usr/share/nginx/html;
+            try_files $uri =404;
+        }
+
         location / {
             try_files $uri $uri/ /index.html;
         }
