@@ -109,9 +109,14 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
 
   useEffect(() => {
     let cancelled = false
-    api.userIps(current.id).then((data) => {
-      if (!cancelled) setIps(data)
-    })
+    api.userIps(current.id)
+      .then(async (data) => {
+        if (cancelled) return
+        setIps(data)
+        const next = await api.user(current.id)
+        if (!cancelled) onChanged(next)
+      })
+      .catch(() => undefined)
     return () => {
       cancelled = true
     }
