@@ -169,6 +169,8 @@ def install_remote(vps_id: str, password: str | None = None) -> None:
             log("使用已有密钥登录")
         client = ssh.connect(row.ssh_host, int(row.ssh_port or 22), row.ssh_user or "root")
         try:
+            log("开启 SSH 反向隧道权限")
+            ssh.prepare_reverse_forward(client, settings.trojan_mysql_port)
             log("上传安装包")
             payload = _pack_payload()
             ssh.run(client, f"mkdir -p {REMOTE_ROOT} /tmp")
