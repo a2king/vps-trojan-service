@@ -268,16 +268,19 @@ write_nginx() {
 
 write_camouflage() {
   mkdir -p "${NODE_HTML}"
-  cat > "${NODE_HTML}/index.html" <<EOF
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>${DOMAIN}</title></head>
-<body style="font-family:sans-serif;padding:48px;color:#333">
-  <h1>It works</h1>
-  <p>${DOMAIN}</p>
-</body>
-</html>
-EOF
+  find "${NODE_HTML}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  local src=""
+  if [[ -f "${INSTALL_DIR}/frontend/dist/index.html" ]]; then
+    src="${INSTALL_DIR}/frontend/dist"
+  elif [[ -f "${INSTALL_DIR}/deploy/camouflage/index.html" ]]; then
+    src="${INSTALL_DIR}/deploy/camouflage"
+  fi
+  if [[ -z "$src" ]]; then
+    red "缺少伪装站文件（frontend/dist 或 deploy/camouflage）"
+    exit 1
+  fi
+  cp -a "${src}/." "${NODE_HTML}/"
+  green "已部署伪装站：${NODE_HTML}"
 }
 
 issue_cert() {

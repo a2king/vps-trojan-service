@@ -39,6 +39,9 @@ http {
         root /var/www/node-html;
         index index.html;
 
+        location /api/ { return 404; }
+        location /admin { return 404; }
+
         location / {
             try_files $uri $uri/ /index.html;
         }
