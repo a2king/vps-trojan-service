@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Millbrook Ledger</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f3efe4;
+      color: #1b2430;
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.55;
+    }
+    a { color: #1b2430; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 28px 8vw 18px;
+      border-bottom: 2px solid #1b2430;
+    }
+    .mark { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; }
+    nav { display: flex; gap: 22px; font-size: 14px; }
+    nav a { text-decoration: none; }
+    .hero { padding: 72px 8vw 40px; max-width: 820px; }
+    .hero p { font-family: "Segoe UI", system-ui, sans-serif; color: #5c5648; font-size: 15px; max-width: 42em; }
+    h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); line-height: 1.12; margin: 0 0 18px; }
+    .rule { height: 1px; background: #1b2430; margin: 0 8vw 48px; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 28px; padding: 0 8vw 80px; }
+    .cols h2 { font-size: 1.1rem; margin: 0 0 10px; }
+    .cols p { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px; color: #5c5648; }
+    footer {
+      padding: 22px 8vw 40px;
+      display: flex;
+      justify-content: space-between;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 13px;
+      color: #5c5648;
+      border-top: 1px solid #d7d0c2;
+    }
+    @media (max-width: 800px) {
+      nav { display: none; }
+      .cols { grid-template-columns: 1fr; }
+      footer { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="mark">Millbrook Ledger</div>
+    <nav>
+      <a href="#practice">Practice</a>
+      <a href="#hours">Hours</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+  <section class="hero">
+    <h1>Books kept with care for family firms.</h1>
+    <p>Year-end accounts, payroll and quiet bookkeeping for workshops, clinics and shops across the county. Appointments on Tuesdays and Thursdays.</p>
+  </section>
+  <div class="rule"></div>
+  <section class="cols" id="practice">
+    <div>
+      <h2>Ledgers</h2>
+      <p>Monthly close, VAT returns and a single binder you can actually read.</p>
+    </div>
+    <div>
+      <h2>Payroll</h2>
+      <p>Staff, contractors and pension notes without a twelve-page portal.</p>
+    </div>
+    <div id="hours">
+      <h2>Hours</h2>
+      <p>Tue / Thu 9:30–16:00. Paper files by appointment only.</p>
+    </div>
+  </section>
+  <footer id="contact">
+    <div>12 Stone Row, Millbrook</div>
+    <div><a href="mailto:desk@millbrook-ledger.example">desk@millbrook-ledger.example</a></div>
+    <div>Est. 1988</div>
+  </footer>
+</body>
+</html>

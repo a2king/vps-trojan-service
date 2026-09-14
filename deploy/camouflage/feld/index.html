@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Feld Atelier</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #e7ece6;
+      color: #243028;
+      font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    }
+    .top {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 100vh;
+    }
+    .left { padding: 48px 40px; display: flex; flex-direction: column; justify-content: space-between; }
+    .right {
+      background:
+        linear-gradient(165deg, #c5d0c4 0%, #8fa392 42%, #4e5f52 100%);
+      min-height: 320px;
+    }
+    .name { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; }
+    h1 { font-weight: 400; font-size: clamp(2rem, 4.4vw, 3.2rem); line-height: 1.15; max-width: 12ch; letter-spacing: -0.03em; }
+    p { color: #4d5b52; line-height: 1.65; max-width: 34em; }
+    .meta { font-size: 13px; color: #4d5b52; display: flex; gap: 28px; }
+    a { color: #243028; }
+    @media (max-width: 860px) {
+      .top { grid-template-columns: 1fr; min-height: auto; }
+      .right { min-height: 220px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="left">
+      <div class="name">Feld Atelier</div>
+      <div>
+        <h1>Rooms, courtyards, and the space between.</h1>
+        <p>A two-person practice for houses, small civic rooms and landscape edges. We draw slowly and build with local trades.</p>
+      </div>
+      <div class="meta">
+        <span>Graz / Berlin</span>
+        <a href="mailto:studio@feld-atelier.example">studio@feld-atelier.example</a>
+      </div>
+    </div>
+    <div class="right" aria-hidden="true"></div>
+  </div>
+</body>
+</html>

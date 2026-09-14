@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>光葉茶舗</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f6f1e7;
+      color: #2c3a31;
+      font-family: "Hiragino Mincho ProN", "Yu Mincho", "Songti SC", serif;
+    }
+    .wrap { display: grid; grid-template-columns: 88px 1fr; min-height: 100vh; }
+    .spine {
+      writing-mode: vertical-rl;
+      letter-spacing: 0.45em;
+      padding: 36px 0;
+      text-align: center;
+      background: #2f4a3a;
+      color: #f6f1e7;
+      font-size: 14px;
+    }
+    main { padding: 64px 10vw 72px; max-width: 720px; }
+    h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 500; margin: 0 0 12px; letter-spacing: 0.08em; }
+    .en { font-family: "Palatino Linotype", Palatino, serif; font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: #7a846c; margin-bottom: 36px; }
+    p { line-height: 1.95; font-size: 16px; }
+    .hours { margin-top: 48px; padding-top: 24px; border-top: 1px solid #d8d0c2; font-size: 14px; line-height: 1.8; }
+    a { color: #2f4a3a; }
+    @media (max-width: 700px) {
+      .wrap { grid-template-columns: 1fr; }
+      .spine { writing-mode: horizontal-tb; letter-spacing: 0.3em; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <aside class="spine">京都 · 東山</aside>
+    <main>
+      <h1>光葉茶舗</h1>
+      <div class="en">Koyo Tea House</div>
+      <p>煎茶、玉露、ほうじ茶を小さな火入れで仕上げています。店内に席は六つ。予約はメールで受けています。</p>
+      <p>We roast and steep a short list of teas in a six-seat room off Higashiyama. Walk-ins when the kettle is free.</p>
+      <div class="hours">
+        11:00–18:00 · 水曜休<br />
+        <a href="mailto:hello@koyo-tea.example">hello@koyo-tea.example</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
