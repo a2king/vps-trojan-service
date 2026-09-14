@@ -19,8 +19,11 @@ from app.timeutil import TZ, now_local
 logger = logging.getLogger("trojan-admin")
 settings = get_settings()
 
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 AUTH_RE = re.compile(
-    r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[INFO\] (.+) authenticated by authenticator \(([0-9a-f]{7})\)"
+    r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+\[INFO\]\s+"
+    r"(.+?)\s+authenticated(?:\s+by authenticator \(|\s+as\s+)([0-9a-f]{7,56})\)?",
+    re.IGNORECASE,
 )
 
 REMOTE_READ_SCRIPT = r"""
@@ -80,12 +83,13 @@ def _apply_chunk(
 ) -> None:
     latest_by_account: dict[int, datetime] = {}
     for line in chunk.splitlines():
-        matched = AUTH_RE.search(line.strip())
+        matched = AUTH_RE.search(ANSI_RE.sub("", line.strip()))
         if not matched:
             continue
         seen_at = _parse_log_time(matched.group(1))
         ip = _split_ip(matched.group(2))
-        account_id = prefixes.get(matched.group(3).lower())
+        token = matched.group(3).lower()
+        account_id = prefixes.get(token[:7])
         if not ip or account_id is None:
             continue
         key = (account_id, ip)

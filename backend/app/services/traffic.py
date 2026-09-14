@@ -1,5 +1,6 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
+import logging
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -7,12 +8,49 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import Account, TrafficDaily, TrafficSnapshot, TrojanUser
 from app.services.ips import ingest_trojan_ips
-from app.timeutil import TZ, now_local
+from app.timeutil import now_local
 
+logger = logging.getLogger("trojan-admin")
 settings = get_settings()
 
 
-def collect_once(db: Session) -> None:
+def _add_daily(db: Session, account: Account, today: date, now: datetime, d_delta: int, u_delta: int) -> None:
+    d_delta = max(0, int(d_delta))
+    u_delta = max(0, int(u_delta))
+    if d_delta == 0 and u_delta == 0:
+        return
+    account.last_seen_at = now
+    daily = db.execute(
+        select(TrafficDaily).where(
+            TrafficDaily.account_id == account.id,
+            TrafficDaily.stat_date == today,
+        )
+    ).scalar_one_or_none()
+    if daily is None:
+        daily = TrafficDaily(
+            account_id=account.id,
+            stat_date=today,
+            download_bytes=0,
+            upload_bytes=0,
+        )
+        db.add(daily)
+        db.flush()
+    daily.download_bytes = int(daily.download_bytes) + d_delta
+    daily.upload_bytes = int(daily.upload_bytes) + u_delta
+
+
+def _recorded_totals(db: Session) -> dict[int, tuple[int, int]]:
+    rows = db.execute(
+        select(
+            TrafficDaily.account_id,
+            func.coalesce(func.sum(TrafficDaily.download_bytes), 0),
+            func.coalesce(func.sum(TrafficDaily.upload_bytes), 0),
+        ).group_by(TrafficDaily.account_id)
+    ).all()
+    return {int(account_id): (int(down), int(up)) for account_id, down, up in rows}
+
+
+def collect_traffic(db: Session) -> None:
     now = now_local()
     today = now.date()
     accounts = db.execute(select(Account)).scalars().all()
@@ -20,6 +58,7 @@ def collect_once(db: Session) -> None:
     snapshots = {
         s.account_id: s for s in db.execute(select(TrafficSnapshot)).scalars().all()
     }
+    recorded = _recorded_totals(db)
 
     for account in accounts:
         trojan = users.get(account.password_sha224)
@@ -29,15 +68,15 @@ def collect_once(db: Session) -> None:
         upload = int(trojan.upload or 0)
         snap = snapshots.get(account.id)
         if snap is None:
-            db.add(
-                TrafficSnapshot(
-                    account_id=account.id,
-                    download_bytes=download,
-                    upload_bytes=upload,
-                    collected_at=now,
-                )
+            snap = TrafficSnapshot(
+                account_id=account.id,
+                download_bytes=0,
+                upload_bytes=0,
+                collected_at=now,
             )
-            continue
+            db.add(snap)
+            db.flush()
+            snapshots[account.id] = snap
 
         d_delta = download - int(snap.download_bytes)
         u_delta = upload - int(snap.upload_bytes)
@@ -45,36 +84,35 @@ def collect_once(db: Session) -> None:
             snap.download_bytes = download
             snap.upload_bytes = upload
             snap.collected_at = now
-            continue
+            d_delta = 0
+            u_delta = 0
+
+        if d_delta == 0 and u_delta == 0:
+            down_rec, up_rec = recorded.get(account.id, (0, 0))
+            if down_rec == 0 and up_rec == 0 and (download > 0 or upload > 0):
+                d_delta = download
+                u_delta = upload
 
         snap.download_bytes = download
         snap.upload_bytes = upload
         snap.collected_at = now
-        if d_delta == 0 and u_delta == 0:
-            continue
+        _add_daily(db, account, today, now, d_delta, u_delta)
+        if account.last_seen_at is None and (download > 0 or upload > 0):
+            account.last_seen_at = now
 
-        account.last_seen_at = now
-        daily = db.execute(
-            select(TrafficDaily).where(
-                TrafficDaily.account_id == account.id,
-                TrafficDaily.stat_date == today,
-            )
-        ).scalar_one_or_none()
-        if daily is None:
-            daily = TrafficDaily(
-                account_id=account.id,
-                stat_date=today,
-                download_bytes=0,
-                upload_bytes=0,
-            )
-            db.add(daily)
-        daily.download_bytes = int(daily.download_bytes) + d_delta
-        daily.upload_bytes = int(daily.upload_bytes) + u_delta
-
-    ingest_trojan_ips(db)
     cutoff = today - timedelta(days=max(1, settings.log_retention_days))
     db.query(TrafficDaily).filter(TrafficDaily.stat_date < cutoff).delete()
     db.commit()
+
+
+def collect_once(db: Session) -> None:
+    collect_traffic(db)
+    try:
+        ingest_trojan_ips(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("读取登录日志失败")
 
 
 def month_start(day: date) -> date:

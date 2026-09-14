@@ -202,6 +202,7 @@ export const api = {
   saveUserNodes: (id: number, groups: { group_name: string; vps_ids: string[] }[]) =>
     request<User>(`/api/users/${id}/nodes`, { method: 'PUT', body: JSON.stringify({ groups }) }),
   users: () => request<User[]>('/api/users'),
+  user: (id: number) => request<User>(`/api/users/${id}`),
   createUser: (payload: { name: string; password?: string; remark?: string }) =>
     request<User>('/api/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (id: number, payload: { name?: string; remark?: string; enabled?: boolean }) =>

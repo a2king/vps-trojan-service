@@ -12,7 +12,7 @@ from app.security import generate_password, sha224_hex
 from app.services import get_trojan_user, set_trojan_enabled, to_user_out
 from app.services.ips import list_account_ips
 from app.services.nodes import assign_default_nodes, replace_group_nodes
-from app.services.traffic import daily_map, month_start, month_totals, overview_stats, series_daily, series_monthly
+from app.services.traffic import collect_traffic, daily_map, month_start, month_totals, overview_stats, series_daily, series_monthly
 from app.timeutil import now_local, to_iso
 
 router = APIRouter(prefix="/api", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -50,11 +50,13 @@ def _get_account(db: Session, user_id: int) -> Account:
 
 @router.get("/overview", response_model=Overview)
 def overview(_: Admin = Depends(get_current_admin), db: Session = Depends(get_db)) -> Overview:
+    collect_traffic(db)
     return Overview(**overview_stats(db))
 
 
 @router.get("/users", response_model=list[UserOut])
 def list_users(db: Session = Depends(get_db)) -> list[UserOut]:
+    collect_traffic(db)
     accounts = db.execute(select(Account).order_by(Account.id.desc())).scalars().all()
     return _stats_for_accounts(db, accounts)
 
@@ -103,6 +105,7 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)) -> UserOut:
 
 @router.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
+    collect_traffic(db)
     account = _get_account(db, user_id)
     return _stats_for_accounts(db, [account])[0]
 

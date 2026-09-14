@@ -50,7 +50,7 @@ def job_collect() -> None:
     try:
         collect_once(db)
     except Exception:
-        logger.exception("流量采集失败")
+        logger.exception("流量或登录日志采集失败")
         db.rollback()
     finally:
         db.close()
