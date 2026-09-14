@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_admin
 from app.models import Admin, Vps
-from app.schemas import VpsCreate, VpsLogOut, VpsOut, VpsUpdate
+from app.schemas import VpsCreate, VpsLogOut, VpsOut, VpsRedeploy, VpsUpdate
 from app.services import install_logs, node_install, ssh
 from app.services.nodes import (
     get_vps,
@@ -100,24 +100,22 @@ def read_logs(vps_id: str, db: Session = Depends(get_db)) -> VpsLogOut:
     return VpsLogOut(id=row.id, status=row.status, log=install_logs.read_log(row.id))
 
 
-@router.post("/{vps_id}/reinstall", response_model=VpsOut)
-def reinstall_node(vps_id: str, body: VpsCreate, db: Session = Depends(get_db)) -> VpsOut:
+@router.post("/{vps_id}/redeploy", response_model=VpsOut)
+def redeploy_node(vps_id: str, body: VpsRedeploy | None = None, db: Session = Depends(get_db)) -> VpsOut:
     row = get_vps(db, vps_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="节点不存在")
     if row.is_local:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="本机节点无需远程安装")
-    row.ssh_host = body.ssh_host.strip() or row.ssh_host
-    row.ssh_port = int(body.ssh_port or row.ssh_port or 22)
-    row.ssh_user = (body.ssh_user or row.ssh_user or "root").strip() or "root"
-    if body.name:
-        row.name = body.name.strip()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="本机节点请在服务器上执行 install.sh 更新")
+    if row.status == "installing":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该节点正在安装")
+    password = (body.ssh_password if body else "") or ""
     row.status = "installing"
     row.last_error = ""
     db.commit()
     db.refresh(row)
     try:
-        node_install.start_install_job(row.id, body.ssh_password)
+        node_install.start_install_job(row.id, password)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _out(row)

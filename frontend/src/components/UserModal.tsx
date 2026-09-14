@@ -75,6 +75,7 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
   const [granularity, setGranularity] = useState<'day' | 'month'>('day')
   const [points, setPoints] = useState<TrafficPoint[]>([])
   const [ips, setIps] = useState<UserIp[]>([])
+  const [ipError, setIpError] = useState('')
   const [busy, setBusy] = useState(false)
   const [nodes, setNodes] = useState<VpsNode[]>([])
   const [groupNames, setGroupNames] = useState<string[]>([])
@@ -109,6 +110,7 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
 
   useEffect(() => {
     let cancelled = false
+    setIpError('')
     api.userIps(current.id)
       .then(async (data) => {
         if (cancelled) return
@@ -116,7 +118,9 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
         const next = await api.user(current.id)
         if (!cancelled) onChanged(next)
       })
-      .catch(() => undefined)
+      .catch((err: unknown) => {
+        if (!cancelled) setIpError(err instanceof Error ? err.message : '采集源 IP 失败')
+      })
     return () => {
       cancelled = true
     }
@@ -318,7 +322,9 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
             </p>
             <div className="ip-block">
               <h4>源 IP</h4>
-              {ips.length === 0 ? (
+              {ipError ? (
+                <p className="error" style={{ padding: 0 }}>{ipError}</p>
+              ) : ips.length === 0 ? (
                 <p className="settings-hint" style={{ padding: 0 }}>暂无记录。用户连上代理后会出现在这里。</p>
               ) : (
                 <div className="ip-scroll scroll-inset">

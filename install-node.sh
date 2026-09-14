@@ -369,7 +369,7 @@ install_trojan_bin() {
 
 setup_log() {
   touch /var/log/trojan.log
-  chmod 640 /var/log/trojan.log
+  chmod 644 /var/log/trojan.log
 }
 
 require_root
