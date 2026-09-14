@@ -137,7 +137,24 @@ export function NodesPage() {
     }
   }
 
-  async function remove(item: VpsNode) {
+  async function redeploy(item: VpsNode) {
+    if (item.is_local) return
+    if (item.status === 'installing') {
+      notify('该节点正在安装')
+      return
+    }
+    if (!window.confirm(`重新部署节点「${item.id}」？会用当前安装包覆盖远端 Trojan、nginx 和伪装站，证书一般会复用，期间节点可能短暂不可用。`)) {
+      return
+    }
+    try {
+      const next = await api.redeployVps(item.id)
+      setNodes((prev) => prev.map((row) => (row.id === next.id ? next : row)))
+      setLogNode(next)
+      notify('已开始重新部署')
+    } catch (err) {
+      notify(err instanceof Error ? err.message : '重新部署失败')
+    }
+  }
     if (item.is_local) return
     if (!window.confirm(`删除节点「${item.id}」？远端 Trojan 不会自动卸载。`)) return
     try {
@@ -230,9 +247,19 @@ export function NodesPage() {
                       <td>
                         <div className="rule-actions">
                           {item.is_local ? null : (
-                            <button className="btn ghost" type="button" onClick={() => setLogNode(item)}>
-                              日志
-                            </button>
+                            <>
+                              <button className="btn ghost" type="button" onClick={() => setLogNode(item)}>
+                                日志
+                              </button>
+                              <button
+                                className="btn ghost"
+                                type="button"
+                                disabled={item.status === 'installing'}
+                                onClick={() => redeploy(item)}
+                              >
+                                {item.status === 'installing' ? '部署中…' : '重新部署'}
+                              </button>
+                            </>
                           )}
                           <button className="btn ghost" type="button" onClick={() => toggleHidden(item)}>
                             {item.hidden ? '取消隐藏' : '设为高级'}

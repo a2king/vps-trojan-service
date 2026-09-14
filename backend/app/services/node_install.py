@@ -142,27 +142,30 @@ def _set_status(db: Session, vps_id: str, status: str, error: str = "") -> None:
     db.commit()
 
 
-def install_remote(vps_id: str, password: str) -> None:
+def install_remote(vps_id: str, password: str | None = None) -> None:
     db = SessionLocal()
     try:
         row = db.get(Vps, normalize_domain(vps_id))
         if row is None or row.is_local:
             return
         vps_id = row.id
+        password = (password or "").strip() or None
         install_logs.clear_log(vps_id)
         _set_status(db, vps_id, "installing")
         log = lambda line: install_logs.append_log(vps_id, line)
 
         log(f"连接 {row.ssh_user}@{row.ssh_host}:{row.ssh_port}")
-        client = ssh.connect(row.ssh_host, int(row.ssh_port or 22), row.ssh_user or "root", password=password)
-        try:
-            _, pub = ssh.ensure_host_key()
-            log("写入免密公钥")
-            ssh.install_authorized_key(client, pub)
-        finally:
-            client.close()
-
-        log("改用密钥登录")
+        if password:
+            client = ssh.connect(row.ssh_host, int(row.ssh_port or 22), row.ssh_user or "root", password=password)
+            try:
+                _, pub = ssh.ensure_host_key()
+                log("写入免密公钥")
+                ssh.install_authorized_key(client, pub)
+            finally:
+                client.close()
+            log("改用密钥登录")
+        else:
+            log("使用已有密钥登录")
         client = ssh.connect(row.ssh_host, int(row.ssh_port or 22), row.ssh_user or "root")
         try:
             log("上传安装包")
@@ -215,7 +218,7 @@ def install_remote(vps_id: str, password: str) -> None:
         db.close()
 
 
-def start_install_job(vps_id: str, password: str) -> None:
+def start_install_job(vps_id: str, password: str | None = None) -> None:
     existing = _jobs.get(vps_id)
     if existing is not None and existing.is_alive():
         raise RuntimeError("该节点正在安装")
