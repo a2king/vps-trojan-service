@@ -148,12 +148,95 @@ check_dns() {
   fi
 }
 
+# apt 是否真的持有锁（不能靠进程名：pgrep -x apt / unattended-upgr 会误判）
+apt_lock_busy() {
+  python3 - <<'PY' 2>/dev/null
+import fcntl, os, sys
+busy = False
+for p in (
+    "/var/lib/dpkg/lock-frontend",
+    "/var/lib/dpkg/lock",
+    "/var/lib/apt/lists/lock",
+    "/var/cache/apt/archives/lock",
+):
+    try:
+        fd = os.open(p, os.O_RDWR)
+    except FileNotFoundError:
+        continue
+    except OSError:
+        busy = True
+        continue
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(fd, fcntl.LOCK_UN)
+    except OSError:
+        busy = True
+    os.close(fd)
+sys.exit(1 if busy else 0)
+PY
+  local rc=$?
+  [[ $rc -eq 1 ]] && return 0
+  [[ $rc -eq 0 ]] && return 1
+  local f ino
+  for f in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
+    [[ -e "$f" ]] || continue
+    ino=$(stat -c %i "$f" 2>/dev/null) || continue
+    grep -E ":${ino}[[:space:]]" /proc/locks >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+show_apt_locks() {
+  echo "当前 apt/dpkg 锁占用："
+  fuser -v /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>&1 | sed 's/^/  /' || true
+  ps -eo pid,comm,args | grep -E '[a]pt|[d]pkg|[u]nattended' | sed 's/^/  /' || true
+}
+
+pause_apt_timers() {
+  systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+  systemctl stop apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+}
+
+wait_for_apt() {
+  [[ "${PKG:-}" == "apt-get" ]] || return 0
+  pause_apt_timers
+  local i
+  for i in $(seq 1 90); do
+    if ! apt_lock_busy; then
+      return 0
+    fi
+    echo "系统 apt 正忙（锁被占用），等待空闲… ${i}/90"
+    if [[ "$i" -eq 1 || $((i % 15)) -eq 0 ]]; then
+      show_apt_locks
+    fi
+    sleep 2
+  done
+  show_apt_locks
+  red "等待 apt 锁超时。可稍后再添加该节点，或到机器上结束占用锁的进程后再装。"
+  exit 1
+}
+
+apt_cmd() {
+  local n=0
+  wait_for_apt
+  until apt-get "$@"; do
+    n=$((n + 1))
+    if [[ "$n" -ge 8 ]]; then
+      return 1
+    fi
+    echo "apt 失败，${n}/8 次重试…"
+    wait_for_apt
+    sleep 3
+  done
+}
+
 install_packages() {
   green "安装系统依赖…"
   if [[ "$PKG" == "apt-get" ]]; then
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y nginx curl wget unzip zip tar socat cron python3 xz-utils ca-certificates gnupg logrotate libmariadb3
+    wait_for_apt
+    apt_cmd update -y
+    apt_cmd install -y nginx curl wget unzip zip tar socat cron python3 xz-utils ca-certificates gnupg logrotate libmariadb3
   else
     $PKG install -y nginx curl wget unzip zip tar socat cron python3 xz ca-certificates logrotate mariadb-libs
     if [[ -f /etc/selinux/config ]]; then
@@ -185,16 +268,19 @@ write_nginx() {
 
 write_camouflage() {
   mkdir -p "${NODE_HTML}"
-  cat > "${NODE_HTML}/index.html" <<EOF
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>${DOMAIN}</title></head>
-<body style="font-family:sans-serif;padding:48px;color:#333">
-  <h1>It works</h1>
-  <p>${DOMAIN}</p>
-</body>
-</html>
-EOF
+  find "${NODE_HTML}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  local src=""
+  if [[ -f "${INSTALL_DIR}/frontend/dist/index.html" ]]; then
+    src="${INSTALL_DIR}/frontend/dist"
+  elif [[ -f "${INSTALL_DIR}/deploy/camouflage/index.html" ]]; then
+    src="${INSTALL_DIR}/deploy/camouflage"
+  fi
+  if [[ -z "$src" ]]; then
+    red "缺少伪装站文件（frontend/dist 或 deploy/camouflage）"
+    exit 1
+  fi
+  cp -a "${src}/." "${NODE_HTML}/"
+  green "已部署伪装站：${NODE_HTML}"
 }
 
 issue_cert() {

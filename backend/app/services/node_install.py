@@ -23,6 +23,23 @@ REMOTE_ROOT = "/opt/vps-trojan-node"
 _jobs: dict[str, threading.Thread] = {}
 
 
+def _frontend_dist() -> Path | None:
+    for path in (repo_root() / "frontend" / "dist", Path("/usr/share/nginx/html")):
+        try:
+            real = path.resolve()
+        except OSError:
+            continue
+        if (real / "index.html").is_file():
+            return real
+    return None
+
+
+def _skip_source_maps(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    if info.name.endswith(".map"):
+        return None
+    return info
+
+
 def _pack_payload() -> bytes:
     root = repo_root()
     deploy = root / "deploy"
@@ -37,6 +54,9 @@ def _pack_payload() -> bytes:
         tar.add(deploy, arcname="deploy")
         tar.add(script, arcname="install-node.sh")
         tar.add(vendor, arcname="vendor/trojan")
+        dist = _frontend_dist()
+        if dist is not None:
+            tar.add(dist, arcname="frontend/dist", filter=_skip_source_maps)
     return buffer.getvalue()
 
 

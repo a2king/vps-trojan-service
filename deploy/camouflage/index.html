@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Northline Studio</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    :root {
+      --ink: #1d1d1f;
+      --paper: #f5f5f7;
+      --paper-deep: #ffffff;
+      --muted: #6e6e73;
+      --line: rgba(0, 0, 0, 0.08);
+      --glass: rgba(255, 255, 255, 0.72);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+      --radius: 18px;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      color-scheme: light;
+      font: 100%/1.47 var(--sans);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    .home { min-height: 100vh; }
+    .home-bar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 7vw;
+      background: var(--glass);
+      backdrop-filter: blur(22px) saturate(180%);
+      -webkit-backdrop-filter: blur(22px) saturate(180%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+      box-shadow: 0 1px 0 var(--line);
+    }
+    .brand {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 590;
+      letter-spacing: -0.02em;
+    }
+    .brand-mark { width: 18px; height: 18px; }
+    .home-nav { display: flex; gap: 22px; font-size: 13px; color: var(--muted); }
+    .home-nav a { text-decoration: none; padding: 6px 2px; transition: color 180ms var(--ease); }
+    .home-nav a:hover { color: var(--ink); }
+    .hero { padding: 96px 7vw 56px; max-width: 1080px; }
+    .eyebrow {
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 590;
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-family: var(--display);
+      font-weight: 650;
+      font-size: clamp(2.4rem, 6.4vw, 4.6rem);
+      line-height: 1.04;
+      letter-spacing: -0.038em;
+      margin: 0 0 20px;
+      max-width: 14ch;
+    }
+    .hero p {
+      max-width: 38em;
+      font-size: 1.125rem;
+      line-height: 1.55;
+      color: var(--muted);
+      margin: 0;
+      letter-spacing: -0.011em;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0 7vw 72px;
+    }
+    .stats div {
+      background: var(--paper-deep);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+    }
+    .stats strong {
+      display: block;
+      font-size: 2rem;
+      font-weight: 650;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+    }
+    .stats span { color: var(--muted); font-size: 13px; }
+    .section { padding: 0 7vw 88px; }
+    .section h2 {
+      font-family: var(--display);
+      font-size: 1.75rem;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin: 0 0 22px;
+    }
+    .work-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+    .card {
+      min-height: 220px;
+      padding: 28px;
+      background: #ececef;
+      border-radius: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      transition: transform 400ms var(--ease);
+    }
+    .card:hover { transform: scale(1.015); }
+    .card.tall {
+      min-height: 320px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), transparent 40%), #1d1d1f;
+      color: #f5f5f7;
+    }
+    .card small { font-size: 12px; opacity: 0.62; letter-spacing: 0.01em; }
+    .card b {
+      font-size: 1.5rem;
+      font-weight: 620;
+      letter-spacing: -0.03em;
+      margin-top: 8px;
+      line-height: 1.15;
+    }
+    .about { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 48px; align-items: start; }
+    .about p { line-height: 1.6; color: var(--muted); margin: 0 0 16px; }
+    .contact {
+      padding: 28px 7vw 48px;
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      background: var(--glass);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-top: 1px solid rgba(255, 255, 255, 0.4);
+    }
+    .contact a { color: var(--ink); }
+    @media (max-width: 800px) {
+      .stats, .work-grid, .about { grid-template-columns: 1fr; }
+      .home-nav { display: none; }
+      .contact { flex-direction: column; }
+      .card:hover { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="home">
+    <header class="home-bar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <path d="M8 22.5L16 7.5L24 22.5H8Z" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="16" cy="16.2" r="1.4" fill="currentColor" />
+        </svg>
+        Northline Studio
+      </div>
+      <nav class="home-nav">
+        <a href="#work">Work</a>
+        <a href="#about">Studio</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow">Independent practice · Est. 2014</div>
+      <h1>Quiet rooms for loud ideas.</h1>
+      <p>
+        Northline is a small studio working across identity, editorial design and spatial
+        graphics. We collaborate with publishers, cultural institutions and family-owned
+        companies that prefer lasting work over seasonal noise.
+      </p>
+    </section>
+
+    <div class="stats">
+      <div>
+        <strong>12 yr</strong>
+        <span>of independent practice</span>
+      </div>
+      <div>
+        <strong>40+</strong>
+        <span>published identities</span>
+      </div>
+      <div>
+        <strong>6</strong>
+        <span>people in the studio</span>
+      </div>
+    </div>
+
+    <section class="section" id="work">
+      <h2>Selected work</h2>
+      <div class="work-grid">
+        <article class="card tall">
+          <small>Editorial · 2025</small>
+          <b>Harbor Review, Issue 09</b>
+        </article>
+        <article class="card">
+          <small>Identity · 2024</small>
+          <b>Atelier Mora</b>
+        </article>
+        <article class="card">
+          <small>Exhibition · 2023</small>
+          <b>North Window</b>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="about">
+      <div class="about">
+        <h2>The studio</h2>
+        <div>
+          <p>
+            We work slowly, with a small bench and a preference for materials that age well:
+            uncoated papers, metal type textures, and colour palettes drawn from coastal
+            light rather than screens.
+          </p>
+          <p>
+            Projects typically begin with a conversation and a stack of references. If that
+            sounds like a fit, write to us with a short brief and a preferred timeline.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="contact" id="contact">
+      <div>Northline Studio · 18 Dock Lane</div>
+      <div>
+        Studio enquiries:
+        <a href="mailto:studio@northline.example">studio@northline.example</a>
+      </div>
+      <div>© <span id="year">2026</span> Northline</div>
+    </footer>
+  </div>
+  <script>document.getElementById("year").textContent = String(new Date().getFullYear())</script>
+</body>
+</html>
