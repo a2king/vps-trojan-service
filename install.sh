@@ -259,20 +259,71 @@ check_dns() {
   fi
 }
 
+# apt 是否真的持有锁（不能靠进程名：pgrep -x apt / unattended-upgr 会误判）
+apt_lock_busy() {
+  python3 - <<'PY' 2>/dev/null
+import fcntl, os, sys
+busy = False
+for p in (
+    "/var/lib/dpkg/lock-frontend",
+    "/var/lib/dpkg/lock",
+    "/var/lib/apt/lists/lock",
+    "/var/cache/apt/archives/lock",
+):
+    try:
+        fd = os.open(p, os.O_RDWR)
+    except FileNotFoundError:
+        continue
+    except OSError:
+        busy = True
+        continue
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(fd, fcntl.LOCK_UN)
+    except OSError:
+        busy = True
+    os.close(fd)
+sys.exit(1 if busy else 0)
+PY
+  local rc=$?
+  [[ $rc -eq 1 ]] && return 0
+  [[ $rc -eq 0 ]] && return 1
+  local f ino
+  for f in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
+    [[ -e "$f" ]] || continue
+    ino=$(stat -c %i "$f" 2>/dev/null) || continue
+    grep -E ":${ino}[[:space:]]" /proc/locks >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+show_apt_locks() {
+  echo "当前 apt/dpkg 锁占用："
+  fuser -v /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>&1 | sed 's/^/  /' || true
+  ps -eo pid,comm,args | grep -E '[a]pt|[d]pkg|[u]nattended' | sed 's/^/  /' || true
+}
+
+pause_apt_timers() {
+  systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+  systemctl stop apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+}
+
 wait_for_apt() {
   [[ "${PKG:-}" == "apt-get" ]] || return 0
+  pause_apt_timers
   local i
   for i in $(seq 1 90); do
-    if ! pgrep -x apt-get >/dev/null 2>&1 \
-      && ! pgrep -x apt >/dev/null 2>&1 \
-      && ! pgrep -x dpkg >/dev/null 2>&1 \
-      && ! pgrep -x unattended-upgr >/dev/null 2>&1; then
+    if ! apt_lock_busy; then
       return 0
     fi
-    echo "系统 apt 正忙（常见于新机器自动更新），等待空闲… ${i}/90"
+    echo "系统 apt 正忙（锁被占用），等待空闲… ${i}/90"
+    if [[ "$i" -eq 1 || $((i % 15)) -eq 0 ]]; then
+      show_apt_locks
+    fi
     sleep 2
   done
-  red "等待 apt 结束超时。请稍后再装，或先结束占用 apt 的进程。"
+  show_apt_locks
+  red "等待 apt 锁超时。请稍后再装，或先结束占用锁的进程。"
   exit 1
 }
 
