@@ -63,8 +63,22 @@ Path(dst).write_text(text, encoding="utf-8")
 PY
 }
 
+http_get() {
+  local url="$1"
+  if command -v curl >/dev/null 2>&1 && curl -4 -fsS --max-time 8 "$url"; then
+    return 0
+  fi
+  if command -v wget >/dev/null 2>&1 && wget -4 -qO- --timeout=8 "$url"; then
+    return 0
+  fi
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys, urllib.request; print(urllib.request.urlopen(sys.argv[1], timeout=8).read().decode().strip())' "$url"; then
+    return 0
+  fi
+  return 1
+}
+
 public_ip() {
-  curl -4 -fsS --max-time 8 https://ipv4.icanhazip.com || curl -4 -fsS --max-time 8 https://ifconfig.me
+  http_get https://ipv4.icanhazip.com || http_get https://ifconfig.me
 }
 
 resolve_domain() {
@@ -140,7 +154,10 @@ setup_timezone() {
 
 check_dns() {
   local real localip
-  localip="$(public_ip | tr -d '[:space:]')"
+  if ! localip="$(public_ip | tr -d '[:space:]')" || [[ -z "$localip" ]]; then
+    red "无法获取本机公网 IP，请检查出网后再装"
+    exit 1
+  fi
   real="$(resolve_domain "$DOMAIN" || true)"
   green "本机公网 IP: ${localip}"
   green "域名解析 IP: ${real:-未知}"
@@ -230,6 +247,21 @@ apt_cmd() {
     wait_for_apt
     sleep 3
   done
+}
+
+ensure_bootstrap_tools() {
+  if command -v curl >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    return 0
+  fi
+  green "安装基础工具（curl / python3）…"
+  if [[ "$PKG" == "apt-get" ]]; then
+    export DEBIAN_FRONTEND=noninteractive
+    wait_for_apt
+    apt_cmd update -y
+    apt_cmd install -y ca-certificates curl wget python3
+  else
+    $PKG install -y ca-certificates curl wget python3
+  fi
 }
 
 install_packages() {
@@ -354,6 +386,7 @@ enable_bbr
 setup_public_dns
 setup_timezone
 check_ports
+ensure_bootstrap_tools
 check_dns
 install_packages
 setup_log
