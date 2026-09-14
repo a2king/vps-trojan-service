@@ -125,6 +125,79 @@ def run(client: paramiko.SSHClient, command: str, timeout: int = 60) -> str:
     return out
 
 
+def run_ok(client: paramiko.SSHClient, command: str, timeout: int = 60) -> str:
+    stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
+    out = stdout.read().decode("utf-8", errors="replace")
+    stdout.channel.recv_exit_status()
+    return out
+
+
+def enable_tcp_forwarding(client: paramiko.SSHClient) -> None:
+    run(
+        client,
+        r"""
+python3 - <<'PY'
+import re, subprocess
+from pathlib import Path
+
+paths = [Path("/etc/ssh/sshd_config")]
+confd = Path("/etc/ssh/sshd_config.d")
+if confd.is_dir():
+    paths.extend(sorted(confd.glob("*.conf")))
+
+def sub_line(text, key, value):
+    pattern = re.compile(rf"(?im)^\s*#?\s*{re.escape(key)}\s+\S+")
+    if pattern.search(text):
+        return pattern.sub(f"{key} {value}", text)
+    return text.rstrip() + f"\n{key} {value}\n"
+
+changed = False
+for path in paths:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    original = text
+    text = sub_line(text, "AllowTcpForwarding", "yes")
+    text = sub_line(text, "GatewayPorts", "no")
+    if text != original:
+        path.write_text(text, encoding="utf-8")
+        changed = True
+
+if confd.is_dir():
+    (confd / "99-trojan-forward.conf").write_text(
+        "AllowTcpForwarding yes\nGatewayPorts no\nPermitListen 127.0.0.1:13306 localhost:13306\n",
+        encoding="utf-8",
+    )
+
+check = subprocess.run(["sshd", "-t"], capture_output=True, text=True)
+if check.returncode != 0:
+    raise SystemExit((check.stderr or check.stdout or "sshd -t 失败").strip())
+if changed or confd.is_dir():
+    for args in (
+        ["systemctl", "reload", "ssh"],
+        ["systemctl", "reload", "sshd"],
+        ["service", "ssh", "reload"],
+        ["service", "sshd", "reload"],
+    ):
+        if subprocess.run(args, capture_output=True, text=True).returncode == 0:
+            break
+print("ok")
+PY
+""".strip(),
+        timeout=40,
+    )
+
+
+def prepare_reverse_forward(client: paramiko.SSHClient, port: int) -> None:
+    mode = run_ok(client, "sshd -T 2>/dev/null | awk '/^allowtcpforwarding/{print $2; exit}'").strip().lower()
+    if mode not in {"yes", "all", "remote"}:
+        logger.info("远端 sshd AllowTcpForwarding=%s，正在打开反向隧道权限", mode or "未知")
+        enable_tcp_forwarding(client)
+    run_ok(
+        client,
+        f"fuser -k {int(port)}/tcp >/dev/null 2>&1 || "
+        f"ss -K sport = :{int(port)} >/dev/null 2>&1 || true",
+    )
+
+
 def run_logged(client: paramiko.SSHClient, command: str, on_line: OnLine, timeout: int = 1800) -> int:
     transport = client.get_transport()
     if transport is None:
@@ -190,23 +263,41 @@ class ReverseTunnel(threading.Thread):
                 pass
 
     def run(self) -> None:
+        delay = 5
         while not self._stop.is_set():
             try:
                 self._loop()
-            except Exception:
-                logger.exception("反向隧道断开 %s:%s", self.host, self.port)
+                delay = 5
+            except Exception as exc:
+                logger.warning("反向隧道断开 %s:%s：%s", self.host, self.port, exc)
             if self._stop.is_set():
                 break
-            time.sleep(5)
+            time.sleep(delay)
+            delay = min(delay * 2, 60)
 
     def _loop(self) -> None:
         client = connect(self.host, self.port, self.username, timeout=20)
         self.client = client
+        try:
+            prepare_reverse_forward(client, self.remote_port)
+        except Exception:
+            logger.exception("准备远端反向隧道失败 %s", self.host)
         transport = client.get_transport()
         if transport is None:
             raise RuntimeError("SSH transport 为空")
         transport.set_keepalive(30)
-        transport.request_port_forward("127.0.0.1", self.remote_port)
+        last_error: Exception | None = None
+        for bind in ("127.0.0.1", "localhost", ""):
+            try:
+                transport.request_port_forward(bind, self.remote_port)
+                last_error = None
+                break
+            except Exception as exc:
+                last_error = exc
+        if last_error is not None:
+            raise RuntimeError(
+                f"TCP forwarding request denied（请确认远端 sshd AllowTcpForwarding yes，且 {self.remote_port} 未被占用）"
+            ) from last_error
         logger.info("已建立反向隧道 %s -> 127.0.0.1:%s", self.host, self.local_port)
         while not self._stop.is_set() and transport.is_active():
             channel = transport.accept(1)

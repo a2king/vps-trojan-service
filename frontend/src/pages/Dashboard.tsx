@@ -3,6 +3,8 @@ import type { SystemDisk, SystemInfo, VpsNode } from '../api'
 import { api } from '../api'
 import { formatBytes, formatDateTime, formatUptime } from '../lib/format'
 
+const SYSTEM_POLL_MS = 5 * 60 * 1000
+
 function usageClass(percent: number): string {
   if (percent >= 90) return 'high'
   if (percent >= 70) return 'warn'
@@ -72,20 +74,25 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     let timer = 0
+    let delay = SYSTEM_POLL_MS
     setError('')
-    refresh(vpsId)
-      .then(() => {
-        if (cancelled) return
-        timer = window.setInterval(() => {
-          refresh(vpsId).catch(() => undefined)
-        }, 5000)
-      })
-      .catch((err: unknown) => {
+
+    async function tick() {
+      try {
+        await refresh(vpsId)
+        delay = SYSTEM_POLL_MS
+        if (!cancelled) setError('')
+      } catch (err: unknown) {
+        delay = Math.min(delay * 2, SYSTEM_POLL_MS * 2)
         if (!cancelled) setError(err instanceof Error ? err.message : '加载失败')
-      })
+      }
+      if (!cancelled) timer = window.setTimeout(tick, delay)
+    }
+
+    tick()
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      window.clearTimeout(timer)
     }
   }, [vpsId])
 

@@ -152,6 +152,50 @@ setup_timezone() {
   fi
 }
 
+enable_ssh_forwarding() {
+  green "开启 SSH 反向隧道（AllowTcpForwarding）…"
+  python3 - <<'PY' || true
+import re, subprocess
+from pathlib import Path
+
+paths = [Path("/etc/ssh/sshd_config")]
+confd = Path("/etc/ssh/sshd_config.d")
+if confd.is_dir():
+    paths.extend(sorted(confd.glob("*.conf")))
+
+def sub_line(text, key, value):
+    pattern = re.compile(rf"(?im)^\s*#?\s*{re.escape(key)}\s+\S+")
+    if pattern.search(text):
+        return pattern.sub(f"{key} {value}", text)
+    return text.rstrip() + f"\n{key} {value}\n"
+
+for path in paths:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    original = text
+    text = sub_line(text, "AllowTcpForwarding", "yes")
+    text = sub_line(text, "GatewayPorts", "no")
+    if text != original:
+        path.write_text(text, encoding="utf-8")
+if confd.is_dir():
+    (confd / "99-trojan-forward.conf").write_text(
+        "AllowTcpForwarding yes\nGatewayPorts no\nPermitListen 127.0.0.1:13306 localhost:13306\n",
+        encoding="utf-8",
+    )
+check = subprocess.run(["sshd", "-t"], capture_output=True, text=True)
+if check.returncode != 0:
+    raise SystemExit((check.stderr or check.stdout or "sshd -t 失败").strip())
+for args in (
+    ["systemctl", "reload", "ssh"],
+    ["systemctl", "reload", "sshd"],
+    ["service", "ssh", "reload"],
+    ["service", "sshd", "reload"],
+):
+    if subprocess.run(args, capture_output=True).returncode == 0:
+        break
+print("ok")
+PY
+}
+
 check_dns() {
   local real localip
   if ! localip="$(public_ip | tr -d '[:space:]')" || [[ -z "$localip" ]]; then
@@ -385,6 +429,7 @@ export DOMAIN INSTALL_DIR NGINX_USER MYSQL_USERNAME TROJAN_FALLBACK_PASSWORD ACM
 enable_bbr
 setup_public_dns
 setup_timezone
+enable_ssh_forwarding
 check_ports
 ensure_bootstrap_tools
 check_dns

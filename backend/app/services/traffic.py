@@ -1,16 +1,13 @@
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
-import logging
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import Account, TrafficDaily, TrafficSnapshot, TrojanUser
-from app.services.ips import ingest_trojan_ips
 from app.timeutil import now_local
 
-logger = logging.getLogger("trojan-admin")
 settings = get_settings()
 
 
@@ -103,16 +100,6 @@ def collect_traffic(db: Session) -> None:
     cutoff = today - timedelta(days=max(1, settings.log_retention_days))
     db.query(TrafficDaily).filter(TrafficDaily.stat_date < cutoff).delete()
     db.commit()
-
-
-def collect_once(db: Session) -> None:
-    collect_traffic(db)
-    try:
-        ingest_trojan_ips(db)
-        db.commit()
-    except Exception:
-        db.rollback()
-        logger.exception("读取登录日志失败")
 
 
 def month_start(day: date) -> date:

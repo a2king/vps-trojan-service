@@ -191,5 +191,11 @@ class VpsUpdate(BaseModel):
     hidden: bool | None = None
 
 
+class VpsLogOut(BaseModel):
+    id: str
+    status: str
+    log: str
+
+
 class VpsRedeploy(BaseModel):
     ssh_password: str = Field(default="", max_length=256)
