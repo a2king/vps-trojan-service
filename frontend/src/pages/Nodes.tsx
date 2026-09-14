@@ -155,6 +155,8 @@ export function NodesPage() {
       notify(err instanceof Error ? err.message : '重新部署失败')
     }
   }
+
+  async function remove(item: VpsNode) {
     if (item.is_local) return
     if (!window.confirm(`删除节点「${item.id}」？远端 Trojan 不会自动卸载。`)) return
     try {
