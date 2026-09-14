@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     trojan_mysql_port: int = 13306
 
     traffic_interval_seconds: int = 300
+    ip_ingest_interval_seconds: int = 3600
     log_retention_days: int = 31
     timezone: str = "Asia/Shanghai"
     trojan_log_path: str = "/var/log/trojan.log"

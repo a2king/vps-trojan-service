@@ -16,8 +16,9 @@ from app.security import hash_admin_password
 from app.services.clash import seed_clash
 from app.services.node_install import start_online_tunnels
 from app.services.nodes import seed_local_vps
+from app.services.ips import ingest_trojan_ips
 from app.services.ssh import stop_all_tunnels
-from app.services.traffic import collect_once
+from app.services.traffic import collect_traffic
 from app.timeutil import now_local
 
 settings = get_settings()
@@ -46,12 +47,24 @@ def init_db() -> None:
         db.close()
 
 
-def job_collect() -> None:
+def job_traffic() -> None:
     db = SessionLocal()
     try:
-        collect_once(db)
+        collect_traffic(db)
     except Exception:
-        logger.exception("流量或登录日志采集失败")
+        logger.exception("流量采集失败")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def job_ingest_ips() -> None:
+    db = SessionLocal()
+    try:
+        ingest_trojan_ips(db)
+        db.commit()
+    except Exception:
+        logger.exception("登录 IP 采集失败")
         db.rollback()
     finally:
         db.close()
@@ -63,9 +76,13 @@ def _after_start() -> None:
     except Exception:
         logger.exception("启动节点隧道失败")
     try:
-        job_collect()
+        job_traffic()
     except Exception:
-        logger.exception("启动采集失败")
+        logger.exception("启动流量采集失败")
+    try:
+        job_ingest_ips()
+    except Exception:
+        logger.exception("启动登录 IP 采集失败")
 
 
 @asynccontextmanager
@@ -76,10 +93,17 @@ async def lifespan(_: FastAPI):
     logger.info("SQLite MySQL 兼容端口已监听 %s:%s", settings.trojan_mysql_host, settings.trojan_mysql_port)
     scheduler = BackgroundScheduler(timezone=settings.timezone)
     scheduler.add_job(
-        job_collect,
+        job_traffic,
         "interval",
         seconds=max(60, settings.traffic_interval_seconds),
         id="traffic-collect",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        job_ingest_ips,
+        "interval",
+        seconds=max(60, settings.ip_ingest_interval_seconds),
+        id="ip-ingest",
         replace_existing=True,
     )
     scheduler.start()

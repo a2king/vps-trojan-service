@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -94,6 +95,19 @@ def _prefix_map(db: Session) -> dict[str, int]:
     return mapping
 
 
+def _ingest_context(db: Session) -> tuple[dict[str, int], dict[int, Account], dict[tuple[int, str], AccountIp]]:
+    prefixes = _prefix_map(db)
+    accounts = {row.id: row for row in db.execute(select(Account)).scalars().all()}
+    existing = {
+        (row.account_id, row.ip): row
+        for row in db.execute(select(AccountIp)).scalars().all()
+    }
+    for obj in db.new:
+        if isinstance(obj, AccountIp) and obj.account_id and obj.ip:
+            existing[(obj.account_id, obj.ip)] = obj
+    return prefixes, accounts, existing
+
+
 def _apply_chunk(
     db: Session,
     chunk: str,
@@ -143,7 +157,6 @@ def _cursor(db: Session, name: str, inode: int, size: int, force_full: bool) -> 
     if cursor is None:
         cursor = LogCursor(name=name, inode=inode, offset=0)
         db.add(cursor)
-        db.flush()
     offset = 0 if force_full else int(cursor.offset or 0)
     if cursor.inode != inode or offset > size:
         offset = 0
@@ -175,14 +188,16 @@ def _read_journal(unit: str = "trojan") -> str:
         return ""
 
 
-def ingest_local_ips(db: Session, force_full: bool = False) -> int:
+def ingest_local_ips(
+    db: Session,
+    force_full: bool = False,
+    prefixes: dict[str, int] | None = None,
+    accounts: dict[int, Account] | None = None,
+    existing: dict[tuple[int, str], AccountIp] | None = None,
+) -> int:
     path = Path(settings.trojan_log_path)
-    prefixes = _prefix_map(db)
-    accounts = {row.id: row for row in db.execute(select(Account)).scalars().all()}
-    existing = {
-        (row.account_id, row.ip): row
-        for row in db.execute(select(AccountIp)).scalars().all()
-    }
+    if prefixes is None or accounts is None or existing is None:
+        prefixes, accounts, existing = _ingest_context(db)
     matched = 0
     chunk = ""
     if path.is_file():
@@ -207,7 +222,14 @@ def ingest_local_ips(db: Session, force_full: bool = False) -> int:
     return matched
 
 
-def ingest_remote_ips(db: Session, vps: Vps, force_full: bool = False) -> int:
+def ingest_remote_ips(
+    db: Session,
+    vps: Vps,
+    force_full: bool = False,
+    prefixes: dict[str, int] | None = None,
+    accounts: dict[int, Account] | None = None,
+    existing: dict[tuple[int, str], AccountIp] | None = None,
+) -> int:
     if vps.is_local or vps.status != "online":
         return 0
     client = ssh.connect(vps.ssh_host, int(vps.ssh_port or 22), vps.ssh_user or "root", timeout=12)
@@ -235,12 +257,8 @@ def ingest_remote_ips(db: Session, vps: Vps, force_full: bool = False) -> int:
     new_offset = int(payload.get("offset") or 0)
     chunk = str(payload.get("chunk") or "")
     cursor, _ignored = _cursor(db, f"trojan:{vps.id}", inode, size, force_full)
-    prefixes = _prefix_map(db)
-    accounts = {row.id: row for row in db.execute(select(Account)).scalars().all()}
-    existing = {
-        (row.account_id, row.ip): row
-        for row in db.execute(select(AccountIp)).scalars().all()
-    }
+    if prefixes is None or accounts is None or existing is None:
+        prefixes, accounts, existing = _ingest_context(db)
     matched = _apply_chunk(db, chunk, prefixes, accounts, existing)
     cursor.inode = inode
     cursor.offset = new_offset
@@ -248,13 +266,26 @@ def ingest_remote_ips(db: Session, vps: Vps, force_full: bool = False) -> int:
 
 
 def ingest_trojan_ips(db: Session, force_full: bool = False) -> None:
-    ingest_local_ips(db, force_full=force_full)
+    prefixes, accounts, existing = _ingest_context(db)
+    ingest_local_ips(db, force_full=force_full, prefixes=prefixes, accounts=accounts, existing=existing)
     remotes = list(db.execute(select(Vps).where(Vps.is_local == 0, Vps.status == "online")).scalars().all())
     for vps in remotes:
+        vps_id = vps.id
         try:
-            ingest_remote_ips(db, vps, force_full=force_full)
+            ingest_remote_ips(
+                db,
+                vps,
+                force_full=force_full,
+                prefixes=prefixes,
+                accounts=accounts,
+                existing=existing,
+            )
+        except SQLAlchemyError:
+            db.rollback()
+            logger.exception("读取节点 %s 日志失败", vps_id)
+            prefixes, accounts, existing = _ingest_context(db)
         except Exception:
-            logger.exception("读取节点 %s 日志失败", vps.id)
+            logger.exception("读取节点 %s 日志失败", vps_id)
     cutoff = now_local() - timedelta(days=max(1, settings.log_retention_days))
     db.query(AccountIp).filter(AccountIp.last_seen_at < cutoff).delete()
 
@@ -283,9 +314,17 @@ def _account_has_traffic(db: Session, account: Account) -> bool:
     return int(trojan.download or 0) > 0 or int(trojan.upload or 0) > 0
 
 
+def _safe_ingest(db: Session, force_full: bool = False) -> None:
+    try:
+        ingest_trojan_ips(db, force_full=force_full)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("采集 Trojan IP 失败")
+
+
 def list_account_ips(db: Session, account_id: int) -> list[AccountIp]:
-    ingest_trojan_ips(db)
-    db.commit()
+    _safe_ingest(db)
     rows = list(
         db.execute(
             select(AccountIp)
@@ -298,8 +337,7 @@ def list_account_ips(db: Session, account_id: int) -> list[AccountIp]:
     account = db.get(Account, account_id)
     if account is None or not _account_has_traffic(db, account):
         return rows
-    ingest_trojan_ips(db, force_full=True)
-    db.commit()
+    _safe_ingest(db, force_full=True)
     return list(
         db.execute(
             select(AccountIp)
