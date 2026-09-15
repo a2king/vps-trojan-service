@@ -281,7 +281,7 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 .login-card p { margin: 0 0 26px; color: var(--admin-muted); font-size: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field span { font-size: 12px; color: var(--admin-muted); font-weight: 510; }
-.field input, .field textarea {
+.field input, .field textarea, .field select {
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid transparent;
   color: var(--admin-text);
@@ -290,7 +290,7 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   outline: none;
   transition: border-color 160ms var(--ease), background 160ms var(--ease), box-shadow 160ms var(--ease);
 }
-.field input:focus, .field textarea:focus {
+.field input:focus, .field textarea:focus, .field select:focus {
   background: #fff;
   border-color: var(--blue);
   box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.16);

@@ -16,6 +16,7 @@ from app.services.nodes import (
     normalize_domain,
     to_vps_out,
 )
+from app.services.tunnels import tunnels_using_vps
 from app.timeutil import now_local
 
 router = APIRouter(prefix="/api/vps", tags=["vps"], dependencies=[Depends(get_current_admin)])
@@ -86,6 +87,10 @@ def delete_node(vps_id: str, db: Session = Depends(get_db)) -> Response:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="节点不存在")
     if row.is_local:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="本机节点不能删除")
+    used = tunnels_using_vps(db, row.id)
+    if used:
+        names = "、".join(item.name for item in used[:5])
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"请先删除使用该节点跳转的隧道代理：{names}")
     node_install.stop_tunnel(row)
     db.delete(row)
     db.commit()

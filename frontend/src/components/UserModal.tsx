@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { TrafficPoint, User, UserIp, VpsNode } from '../api'
+import type { TrafficPoint, TunnelProxy, User, UserIp, VpsNode } from '../api'
 import { api } from '../api'
 import { copyText, formatBytes, formatDateTime, formatLastSeen, formatPair } from '../lib/format'
 
@@ -78,6 +78,7 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
   const [ipError, setIpError] = useState('')
   const [busy, setBusy] = useState(false)
   const [nodes, setNodes] = useState<VpsNode[]>([])
+  const [tunnels, setTunnels] = useState<TunnelProxy[]>([])
   const [groupNames, setGroupNames] = useState<string[]>([])
   const [groupNodes, setGroupNodes] = useState<Record<string, string[]>>(user.group_nodes || {})
 
@@ -87,9 +88,10 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
   }, [user])
 
   useEffect(() => {
-    Promise.all([api.vps(), api.clashSettings()])
-      .then(([list, profile]) => {
+    Promise.all([api.vps(), api.tunnels(), api.clashSettings()])
+      .then(([list, tunnelList, profile]) => {
         setNodes(list)
+        setTunnels(tunnelList)
         const names = (profile.settings.proxy_groups || [])
           .filter((item) => (item.proxies || []).includes('__NODE__'))
           .map((item) => item.name)
@@ -248,7 +250,7 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                 <CopyBlock value={current.share_uri} label="链接" onCopied={toast} />
               </div>
             </div>
-            {nodes.length > 0 && groupNames.length > 0 ? (
+            {(nodes.length > 0 || tunnels.length > 0) && groupNames.length > 0 ? (
               <div className="group-nodes">
                 <em>策略组节点</em>
                 {groupNames.map((group) => (
@@ -266,6 +268,18 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                             {item.name || item.id}
                             {item.hidden ? ' · 高级' : ''}
                             {item.is_local ? ' · 本机' : ''}
+                          </span>
+                        </label>
+                      ))}
+                      {tunnels.map((item) => (
+                        <label key={item.assign_id} className="node-pick">
+                          <input
+                            type="checkbox"
+                            checked={(groupNodes[group] || []).includes(item.assign_id)}
+                            onChange={() => toggleNode(group, item.assign_id)}
+                          />
+                          <span>
+                            {item.name} · 隧道 · {item.protocol.toUpperCase()} → {item.vps_name || item.vps_id}
                           </span>
                         </label>
                       ))}

@@ -59,12 +59,26 @@ def _account_allowed(password: str, vps_id: str) -> bool:
         ).first()
         if assigned is not None:
             return True
+        hop = conn.execute(
+            text(
+                "SELECT 1 FROM account_group_tunnels t "
+                "JOIN tunnel_proxies p ON p.id = t.tunnel_id "
+                "WHERE t.account_id = :account_id AND p.vps_id = :vps_id LIMIT 1"
+            ),
+            {"account_id": int(row[0]), "vps_id": vps_id},
+        ).first()
+        if hop is not None:
+            return True
         any_row = conn.execute(
             text("SELECT 1 FROM account_group_vps WHERE account_id = :account_id LIMIT 1"),
             {"account_id": int(row[0])},
         ).first()
+        any_tunnel = conn.execute(
+            text("SELECT 1 FROM account_group_tunnels WHERE account_id = :account_id LIMIT 1"),
+            {"account_id": int(row[0])},
+        ).first()
         local_id = (settings.domain or "").strip().lower()
-        return any_row is None and vps_id == local_id
+        return any_row is None and any_tunnel is None and vps_id == local_id
 
 
 def handle_trojan_sql(sql: str, mysql_user: str = "") -> tuple[list, list[str]]:

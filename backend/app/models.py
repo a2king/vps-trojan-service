@@ -119,3 +119,29 @@ class AccountGroupVps(Base):
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     group_name: Mapped[str] = mapped_column(String(128), nullable=False)
     vps_id: Mapped[str] = mapped_column(String(255), ForeignKey("vps.id", ondelete="CASCADE"), nullable=False, index=True)
+
+
+class TunnelProxy(Base):
+    """经 VPS 跳转的家用 HTTP/HTTPS/SOCKS5 代理。"""
+
+    __tablename__ = "tunnel_proxies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False, default="http")
+    server: Mapped[str] = mapped_column(String(255), nullable=False)
+    port: Mapped[int] = mapped_column(Integer, nullable=False)
+    username: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    password: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    vps_id: Mapped[str] = mapped_column(String(255), ForeignKey("vps.id", ondelete="RESTRICT"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
+class AccountGroupTunnel(Base):
+    __tablename__ = "account_group_tunnels"
+    __table_args__ = (UniqueConstraint("account_id", "group_name", "tunnel_id", name="uk_account_group_tunnel"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    tunnel_id: Mapped[int] = mapped_column(Integer, ForeignKey("tunnel_proxies.id", ondelete="CASCADE"), nullable=False, index=True)

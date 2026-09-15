@@ -130,6 +130,19 @@ export type VpsLog = {
   log: string
 }
 
+export type TunnelProxy = {
+  id: number
+  assign_id: string
+  name: string
+  protocol: 'http' | 'https' | 'socks5' | string
+  server: string
+  port: number
+  username: string
+  vps_id: string
+  vps_name: string
+  created_at: string
+}
+
 export type ClashImportPreview = {
   total: number
   duplicated: number
@@ -243,4 +256,27 @@ export const api = {
     }),
   confirmClashImport: (rules: string[]) =>
     request<ClashRule[]>('/api/clash/rules/import', { method: 'POST', body: JSON.stringify({ rules }) }),
+  tunnels: () => request<TunnelProxy[]>('/api/tunnels'),
+  createTunnel: (payload: {
+    name: string
+    protocol: string
+    server: string
+    port: number
+    username: string
+    password: string
+    vps_id: string
+  }) => request<TunnelProxy>('/api/tunnels', { method: 'POST', body: JSON.stringify(payload) }),
+  updateTunnel: (
+    id: number,
+    payload: {
+      name?: string
+      protocol?: string
+      server?: string
+      port?: number
+      username?: string
+      password?: string
+      vps_id?: string
+    },
+  ) => request<TunnelProxy>(`/api/tunnels/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteTunnel: (id: number) => request<void>(`/api/tunnels/${id}`, { method: 'DELETE' }),
 }
