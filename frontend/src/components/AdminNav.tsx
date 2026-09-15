@@ -11,6 +11,7 @@ export function AdminNav({ username, domain }: Props) {
   const onDashboard = location.pathname === '/admin' || location.pathname === '/admin/'
   const onUsers = location.pathname.startsWith('/admin/users')
   const onNodes = location.pathname.startsWith('/admin/nodes')
+  const onTunnels = location.pathname.startsWith('/admin/tunnels')
   const onRules = location.pathname.startsWith('/admin/rules')
 
   function go(path: string) {
@@ -56,6 +57,15 @@ export function AdminNav({ username, domain }: Props) {
           }}
         >
           节点
+        </Link>
+        <Link
+          className={onTunnels ? 'on' : ''}
+          to="/admin/tunnels"
+          onPointerDown={(event) => {
+            if (event.button === 0) go('/admin/tunnels')
+          }}
+        >
+          隧道代理
         </Link>
         <Link
           className={onRules ? 'on' : ''}

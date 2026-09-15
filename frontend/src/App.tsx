@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/Dashboard'
 import { LoginPage } from './pages/Login'
 import { RulesPage } from './pages/Rules'
 import { NodesPage } from './pages/Nodes'
+import { TunnelsPage } from './pages/Tunnels'
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
           <Route index element={<DashboardPage />} />
           <Route path="users" element={<AdminPage />} />
           <Route path="nodes" element={<NodesPage />} />
+          <Route path="tunnels" element={<TunnelsPage />} />
           <Route path="rules" element={<RulesPage />} />
         </Route>
         <Route path="/admin/*" element={<Navigate to="/admin" replace />} />

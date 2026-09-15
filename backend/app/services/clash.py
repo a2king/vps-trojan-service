@@ -264,6 +264,7 @@ def _resolve_group_proxies(items: list[Any], replacements: list[str], fallback: 
 
 def render_clash_yaml(account: Account, db: Session) -> str:
     from app.services.nodes import group_nodes_map, list_vps, local_vps_id, vps_proxy_name
+    from app.services.tunnels import clash_proxy_items, list_tunnels, parse_assign_id
 
     data = get_clash_settings(db)
     alpn = data.get("alpn") or ["h2", "http/1.1"]
@@ -275,24 +276,50 @@ def render_clash_yaml(account: Account, db: Session) -> str:
 
     all_nodes = list_vps(db)
     by_id = {item.id: item for item in all_nodes}
+    all_tunnels = list_tunnels(db)
+    tunnels_by_id = {item.id: item for item in all_tunnels}
     assignments = group_nodes_map(db, account.id)
     assigned_ids: list[str] = []
+    assigned_tunnels: list = []
     seen_ids: set[str] = set()
-    for vps_ids in assignments.values():
-        for vps_id in vps_ids:
-            if vps_id in seen_ids or vps_id not in by_id:
+    seen_tunnels: set[int] = set()
+    explicit_keys: list[str] = []
+    seen_explicit: set[str] = set()
+    for keys in assignments.values():
+        for key in keys:
+            if key not in seen_explicit:
+                seen_explicit.add(key)
+                explicit_keys.append(key)
+            tunnel_id = parse_assign_id(key)
+            if tunnel_id is not None:
+                tunnel = tunnels_by_id.get(tunnel_id)
+                if tunnel is None or tunnel.id in seen_tunnels:
+                    continue
+                seen_tunnels.add(tunnel.id)
+                assigned_tunnels.append(tunnel)
+                if tunnel.vps_id in by_id and tunnel.vps_id not in seen_ids:
+                    seen_ids.add(tunnel.vps_id)
+                    assigned_ids.append(tunnel.vps_id)
                 continue
-            seen_ids.add(vps_id)
-            assigned_ids.append(vps_id)
-    if not assigned_ids:
+            if key in seen_ids or key not in by_id:
+                continue
+            seen_ids.add(key)
+            assigned_ids.append(key)
+    if not assigned_ids and not assigned_tunnels:
         local_id = local_vps_id()
         if local_id in by_id:
             assigned_ids = [local_id]
         elif all_nodes:
             assigned_ids = [all_nodes[0].id]
 
-    assigned = [by_id[vps_id] for vps_id in assigned_ids]
-    fallback_name = vps_proxy_name(assigned[0], all_nodes) if assigned else default_node_name()
+    assigned = [by_id[vps_id] for vps_id in assigned_ids if vps_id in by_id]
+    fallback_name = ""
+    if assigned:
+        fallback_name = vps_proxy_name(assigned[0], all_nodes)
+    elif assigned_tunnels:
+        fallback_name = assigned_tunnels[0].name
+    else:
+        fallback_name = default_node_name()
 
     lines: list[str] = [
         f"mixed-port: {int(data.get('mixed_port') or 7890)}",
@@ -322,12 +349,29 @@ def render_clash_yaml(account: Account, db: Session) -> str:
                 ]
             )
         )
+    for tunnel in assigned_tunnels:
+        hop = by_id.get(tunnel.vps_id)
+        if hop is None:
+            continue
+        dialer = vps_proxy_name(hop, all_nodes)
+        lines.append("  - " + _flow_map(clash_proxy_items(tunnel, dialer)))
     lines.append("")
     lines.append("proxy-groups:")
     for group in groups:
         name = str(group.get("name") or "PROXY")
-        selected_ids = assignments.get(name) or assigned_ids
-        selected_names = [vps_proxy_name(by_id[vps_id], all_nodes) for vps_id in selected_ids if vps_id in by_id]
+        selected_keys = assignments.get(name) or []
+        if not selected_keys:
+            selected_keys = explicit_keys or list(assigned_ids)
+        selected_names: list[str] = []
+        for key in selected_keys:
+            tunnel_id = parse_assign_id(key)
+            if tunnel_id is not None:
+                tunnel = tunnels_by_id.get(tunnel_id)
+                if tunnel is not None:
+                    selected_names.append(tunnel.name)
+                continue
+            if key in by_id:
+                selected_names.append(vps_proxy_name(by_id[key], all_nodes))
         proxies = _resolve_group_proxies(list(group.get("proxies") or [NODE_PLACEHOLDER]), selected_names, fallback_name)
         lines.append(
             "  - "

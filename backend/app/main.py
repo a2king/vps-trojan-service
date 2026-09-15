@@ -9,9 +9,9 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
-from app.models import Account, AccountGroupVps, AccountIp, Admin, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser, Vps  # noqa: F401
+from app.models import Account, AccountGroupTunnel, AccountGroupVps, AccountIp, Admin, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser, TunnelProxy, Vps  # noqa: F401
 from app.mysql_bridge import create_mysql_server
-from app.routers import auth, clash, subscribe, system, users, vps
+from app.routers import auth, clash, subscribe, system, tunnels, users, vps
 from app.security import hash_admin_password
 from app.services.clash import seed_clash
 from app.services.node_install import start_online_tunnels
@@ -126,6 +126,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(vps.router)
+app.include_router(tunnels.router)
 app.include_router(system.router)
 app.include_router(clash.router)
 app.include_router(subscribe.router)

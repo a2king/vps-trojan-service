@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import Account, AccountGroupVps, Vps
+from app.models import Account, AccountGroupTunnel, AccountGroupVps, TunnelProxy, Vps
 from app.services.clash import NODE_PLACEHOLDER, default_node_name, get_clash_settings
 from app.timeutil import now_local, to_iso
 
@@ -141,6 +141,8 @@ def backfill_missing_assignments(db: Session) -> None:
 
 
 def group_nodes_map(db: Session, account_id: int) -> dict[str, list[str]]:
+    from app.services.tunnels import assign_id
+
     rows = list(
         db.execute(
             select(AccountGroupVps)
@@ -151,18 +153,39 @@ def group_nodes_map(db: Session, account_id: int) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for row in rows:
         result.setdefault(row.group_name, []).append(row.vps_id)
+    tunnels = list(
+        db.execute(
+            select(AccountGroupTunnel)
+            .where(AccountGroupTunnel.account_id == account_id)
+            .order_by(AccountGroupTunnel.group_name, AccountGroupTunnel.tunnel_id)
+        ).scalars().all()
+    )
+    for row in tunnels:
+        result.setdefault(row.group_name, []).append(assign_id(row.tunnel_id))
     return result
 
 
 def replace_group_nodes(db: Session, account_id: int, groups: list[tuple[str, list[str]]]) -> dict[str, list[str]]:
+    from app.services.tunnels import parse_assign_id
+
     known = {item.id for item in list_vps(db)}
+    known_tunnels = {int(row.id) for row in db.execute(select(TunnelProxy.id)).scalars().all()}
     db.query(AccountGroupVps).filter(AccountGroupVps.account_id == account_id).delete()
+    db.query(AccountGroupTunnel).filter(AccountGroupTunnel.account_id == account_id).delete()
     seen: set[tuple[str, str]] = set()
+    seen_tunnels: set[tuple[str, int]] = set()
     for group_name, vps_ids in groups:
         name = group_name.strip()
         if not name:
             continue
         for raw in vps_ids:
+            tunnel_id = parse_assign_id(raw)
+            if tunnel_id is not None:
+                if tunnel_id not in known_tunnels or (name, tunnel_id) in seen_tunnels:
+                    continue
+                db.add(AccountGroupTunnel(account_id=account_id, group_name=name, tunnel_id=tunnel_id))
+                seen_tunnels.add((name, tunnel_id))
+                continue
             vps_id = normalize_domain(raw)
             if vps_id not in known or (name, vps_id) in seen:
                 continue
@@ -177,7 +200,16 @@ def assigned_vps_ids(db: Session, account_id: int) -> list[str]:
     rows = db.execute(
         select(AccountGroupVps.vps_id).where(AccountGroupVps.account_id == account_id).distinct()
     ).all()
-    return [str(item[0]) for item in rows]
+    ids = [str(item[0]) for item in rows]
+    if ids:
+        return ids
+    hops = db.execute(
+        select(TunnelProxy.vps_id)
+        .join(AccountGroupTunnel, AccountGroupTunnel.tunnel_id == TunnelProxy.id)
+        .where(AccountGroupTunnel.account_id == account_id)
+        .distinct()
+    ).all()
+    return [str(item[0]) for item in hops]
 
 
 def account_allowed_on_vps(db: Session, password_sha224: str, vps_id: str) -> bool:
@@ -193,10 +225,24 @@ def account_allowed_on_vps(db: Session, password_sha224: str, vps_id: str) -> bo
     ).first()
     if row is not None:
         return True
+    hop = db.execute(
+        select(AccountGroupTunnel.id)
+        .join(TunnelProxy, TunnelProxy.id == AccountGroupTunnel.tunnel_id)
+        .where(
+            AccountGroupTunnel.account_id == account.id,
+            TunnelProxy.vps_id == node_id,
+        )
+        .limit(1)
+    ).first()
+    if hop is not None:
+        return True
     any_row = db.execute(
         select(AccountGroupVps.id).where(AccountGroupVps.account_id == account.id).limit(1)
     ).first()
-    return any_row is None and node_id == local_vps_id()
+    any_tunnel = db.execute(
+        select(AccountGroupTunnel.id).where(AccountGroupTunnel.account_id == account.id).limit(1)
+    ).first()
+    return any_row is None and any_tunnel is None and node_id == local_vps_id()
 
 
 def to_vps_out(row: Vps) -> dict:

@@ -199,3 +199,36 @@ class VpsLogOut(BaseModel):
 
 class VpsRedeploy(BaseModel):
     ssh_password: str = Field(default="", max_length=256)
+
+
+class TunnelProxyOut(BaseModel):
+    id: int
+    assign_id: str
+    name: str
+    protocol: str
+    server: str
+    port: int
+    username: str
+    vps_id: str
+    vps_name: str
+    created_at: str
+
+
+class TunnelProxyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    protocol: str = Field(min_length=4, max_length=16)
+    server: str = Field(min_length=1, max_length=255)
+    port: int = Field(ge=1, le=65535)
+    username: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=256)
+    vps_id: str = Field(min_length=1, max_length=255)
+
+
+class TunnelProxyUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    protocol: str | None = Field(default=None, min_length=4, max_length=16)
+    server: str | None = Field(default=None, min_length=1, max_length=255)
+    port: int | None = Field(default=None, ge=1, le=65535)
+    username: str | None = Field(default=None, min_length=1, max_length=128)
+    password: str | None = Field(default=None, min_length=1, max_length=256)
+    vps_id: str | None = Field(default=None, min_length=1, max_length=255)
