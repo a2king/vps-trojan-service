@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_admin
-from app.models import Account, AccountGroupVps, AccountIp, Admin, TrafficDaily, TrafficSnapshot, TrojanUser
+from app.models import Account, AccountGroupTunnel, AccountGroupVps, AccountIp, Admin, TrafficDaily, TrafficSnapshot, TrojanUser
 from app.schemas import Overview, PasswordReset, TrafficPoint, UserCreate, UserIpOut, UserNodesUpdate, UserOut, UserUpdate
 from app.security import generate_password, sha224_hex
 from app.services import get_trojan_user, set_trojan_enabled, to_user_out
@@ -163,6 +163,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
     db.query(TrafficSnapshot).filter(TrafficSnapshot.account_id == account.id).delete()
     db.query(AccountIp).filter(AccountIp.account_id == account.id).delete()
     db.query(AccountGroupVps).filter(AccountGroupVps.account_id == account.id).delete()
+    db.query(AccountGroupTunnel).filter(AccountGroupTunnel.account_id == account.id).delete()
     if trojan is not None:
         db.delete(trojan)
     db.delete(account)

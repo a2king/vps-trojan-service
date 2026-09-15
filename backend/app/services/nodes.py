@@ -169,7 +169,7 @@ def replace_group_nodes(db: Session, account_id: int, groups: list[tuple[str, li
     from app.services.tunnels import parse_assign_id
 
     known = {item.id for item in list_vps(db)}
-    known_tunnels = {int(row.id) for row in db.execute(select(TunnelProxy.id)).scalars().all()}
+    known_tunnels = {int(item) for item in db.execute(select(TunnelProxy.id)).scalars().all()}
     db.query(AccountGroupVps).filter(AccountGroupVps.account_id == account_id).delete()
     db.query(AccountGroupTunnel).filter(AccountGroupTunnel.account_id == account_id).delete()
     seen: set[tuple[str, str]] = set()
