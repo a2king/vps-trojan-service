@@ -21,6 +21,7 @@ export function AdminNav({ username, domain }: Props) {
   function logout() {
     localStorage.removeItem('token')
     localStorage.removeItem('username')
+    localStorage.removeItem('token_expires_at')
     navigate('/admin/login', { replace: true })
   }
 

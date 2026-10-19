@@ -47,9 +47,9 @@
 .admin-nav a {
   color: var(--admin-muted);
   text-decoration: none;
-  padding: 6px 14px;
+  padding: 4px 10px;
   border-radius: 980px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 510;
   transition: background 80ms linear, color 80ms linear, transform 100ms ease-out;
 }
@@ -60,7 +60,7 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.admin-main { padding: 22px 32px 80px; max-width: 1180px; margin: 0 auto; }
+.admin-main { padding: 22px 32px 80px; width: 80vw; max-width: 80vw; margin: 0 auto; }
 
 .kpi-row {
   display: grid;
@@ -193,7 +193,7 @@ table.info-table td {
 .panel {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -201,11 +201,11 @@ table.info-table td {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px 12px;
+  padding: 12px 16px 8px;
 }
 .panel-head h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.02rem;
   font-weight: 650;
   letter-spacing: -0.025em;
 }
@@ -214,10 +214,10 @@ table.info-table td {
 table.users {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
 }
 table.users th, table.users td {
-  padding: 13px 18px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   white-space: nowrap;
@@ -230,7 +230,7 @@ table.users th {
 table.users tbody tr {
   cursor: pointer;
   content-visibility: auto;
-  contain-intrinsic-size: 0 48px;
+  contain-intrinsic-size: 0 36px;
 }
 table.users tbody tr:hover { background: rgba(0, 0, 0, 0.03); }
 table.users tbody tr:active { background: rgba(0, 0, 0, 0.05); }
@@ -279,14 +279,32 @@ table.users tbody tr:last-child td { border-bottom: 0; }
   letter-spacing: -0.035em;
 }
 .login-card p { margin: 0 0 26px; color: var(--admin-muted); font-size: 14px; }
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-.field span { font-size: 12px; color: var(--admin-muted); font-weight: 510; }
+.expire-choices { display: flex; gap: 6px; }
+.expire-choices button {
+  flex: 1;
+  border: 0;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--admin-muted);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.expire-choices button.on {
+  background: #fff;
+  color: var(--admin-text);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.field span { font-size: 11px; color: var(--admin-muted); font-weight: 510; }
 .field input, .field textarea, .field select {
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid transparent;
   color: var(--admin-text);
-  padding: 11px 12px;
-  border-radius: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 13px;
   outline: none;
   transition: border-color 160ms var(--ease), background 160ms var(--ease), box-shadow 160ms var(--ease);
 }
@@ -539,9 +557,9 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 .create-form {
   display: grid;
   grid-template-columns: 1.1fr 1.1fr 1fr auto;
-  gap: 10px;
+  gap: 8px;
   align-items: end;
-  padding: 4px 20px 16px;
+  padding: 2px 16px 12px;
 }
 .create-form .field { margin: 0; }
 .nodes-form {
@@ -657,8 +675,8 @@ table.users tbody tr:last-child td { border-bottom: 0; }
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 4px 20px 16px;
+  gap: 8px;
+  padding: 2px 16px 12px;
 }
 .settings-span { grid-column: 1 / -1; }
 .settings-hint {

@@ -5,7 +5,7 @@ import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
@@ -16,6 +16,7 @@ from app.security import hash_admin_password
 from app.services.clash import seed_clash
 from app.services.node_install import start_online_tunnels
 from app.services.nodes import seed_local_vps
+from app.services.replica_sync import sync_replicas
 from app.services.ips import ingest_trojan_ips
 from app.services.ssh import stop_all_tunnels
 from app.services.traffic import collect_traffic
@@ -25,10 +26,19 @@ settings = get_settings()
 logger = logging.getLogger("trojan-admin")
 
 
+def _migrate(db) -> None:
+    rows = db.execute(text("PRAGMA table_info(vps)")).all()
+    names = {row[1] for row in rows}
+    if names and "replica" not in names:
+        db.execute(text("ALTER TABLE vps ADD COLUMN replica INTEGER NOT NULL DEFAULT 0"))
+        db.commit()
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        _migrate(db)
         admin = db.execute(select(Admin).where(Admin.username == settings.admin_username)).scalar_one_or_none()
         if admin is None:
             db.add(
@@ -58,6 +68,13 @@ def job_traffic() -> None:
         db.close()
 
 
+def job_sync_replicas() -> None:
+    try:
+        sync_replicas()
+    except Exception:
+        logger.exception("备机数据同步失败")
+
+
 def job_ingest_ips() -> None:
     db = SessionLocal()
     try:
@@ -71,6 +88,9 @@ def job_ingest_ips() -> None:
 
 
 def _after_start() -> None:
+    if not settings.is_control_primary:
+        logger.info("CONTROL_ROLE=%s，跳过隧道与后台采集", settings.control_role)
+        return
     try:
         start_online_tunnels()
     except Exception:
@@ -90,26 +110,42 @@ async def lifespan(_: FastAPI):
     init_db()
     mysql_server = create_mysql_server()
     await mysql_server.start_server(host=settings.trojan_mysql_host, port=settings.trojan_mysql_port)
-    logger.info("SQLite MySQL 兼容端口已监听 %s:%s", settings.trojan_mysql_host, settings.trojan_mysql_port)
+    logger.info(
+        "SQLite MySQL 兼容端口已监听 %s:%s（CONTROL_ROLE=%s）",
+        settings.trojan_mysql_host,
+        settings.trojan_mysql_port,
+        settings.control_role,
+    )
     scheduler = BackgroundScheduler(timezone=settings.timezone)
-    scheduler.add_job(
-        job_traffic,
-        "interval",
-        seconds=max(60, settings.traffic_interval_seconds),
-        id="traffic-collect",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        job_ingest_ips,
-        "interval",
-        seconds=max(60, settings.ip_ingest_interval_seconds),
-        id="ip-ingest",
-        replace_existing=True,
-    )
-    scheduler.start()
+    if settings.is_control_primary:
+        scheduler.add_job(
+            job_traffic,
+            "interval",
+            seconds=max(60, settings.traffic_interval_seconds),
+            id="traffic-collect",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            job_ingest_ips,
+            "interval",
+            seconds=max(60, settings.ip_ingest_interval_seconds),
+            id="ip-ingest",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            job_sync_replicas,
+            "interval",
+            seconds=max(300, settings.replica_sync_interval_seconds),
+            id="replica-sync",
+            replace_existing=True,
+        )
+        scheduler.start()
+    else:
+        logger.info("CONTROL_ROLE=%s，未启动流量/IP 定时任务", settings.control_role)
     threading.Thread(target=_after_start, daemon=True, name="startup-tunnels").start()
     yield
-    scheduler.shutdown(wait=False)
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
     stop_all_tunnels()
     mysql_server.close()
     await mysql_server.wait_closed()
@@ -134,4 +170,4 @@ app.include_router(subscribe.router)
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True}
+    return {"ok": True, "control_role": settings.control_role}

@@ -143,7 +143,7 @@ export function NodesPage() {
       notify('该节点正在安装')
       return
     }
-    if (!window.confirm(`重新部署节点「${item.id}」？会用当前安装包覆盖远端 Trojan、nginx 和伪装站，证书一般会复用，期间节点可能短暂不可用。`)) {
+    if (!window.confirm(`重新部署节点「${item.id}」？会用当前安装包覆盖远端 Trojan、nginx 和伪装站，并关闭该服务器的 IPv6。证书一般会复用，期间节点可能短暂不可用。`)) {
       return
     }
     try {

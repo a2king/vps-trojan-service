@@ -6,11 +6,13 @@ from pydantic import BaseModel, Field
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=128)
+    expire_hours: int = 24
 
 
 class TokenResponse(BaseModel):
     token: str
     username: str
+    expire_hours: int
 
 
 class UserCreate(BaseModel):

@@ -132,6 +132,18 @@ check_ports() {
   fi
 }
 
+disable_ipv6() {
+  green "关闭 IPv6…"
+  mkdir -p /etc/sysctl.d
+  install -m 644 "${INSTALL_DIR}/deploy/disable-ipv6.conf" /etc/sysctl.d/99-disable-ipv6.conf
+  sysctl -p /etc/sysctl.d/99-disable-ipv6.conf >/dev/null 2>&1 || true
+  if [[ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)" == "1" ]]; then
+    green "IPv6 已关闭"
+  else
+    red "IPv6 未能关闭，请检查内核是否允许 sysctl"
+  fi
+}
+
 enable_bbr() {
   green "开启 TCP BBR 加速…"
   local major minor
@@ -258,6 +270,7 @@ optimize_network() {
   require_root
   detect_os
   enable_bbr
+  disable_ipv6
   setup_public_dns
   setup_timezone
   green "网络优化完成"
@@ -437,6 +450,7 @@ JWT_EXPIRE_HOURS=168
 DOMAIN=${DOMAIN}
 TROJAN_PORT=443
 DATABASE_URL=sqlite:///./data/trojan.db
+CONTROL_ROLE=primary
 TROJAN_MYSQL_HOST=127.0.0.1
 TROJAN_MYSQL_PORT=13306
 TRAFFIC_INTERVAL_SECONDS=300
@@ -613,6 +627,7 @@ redeploy() {
   export PATH="/root/.local/bin:${HOME}/.local/bin:${PATH}"
 
   green "更新并重启（前端打包 + nginx 配置 + 后端 + nginx）"
+  disable_ipv6
   setup_timezone
   install_node
   install_uv
@@ -656,6 +671,7 @@ install_all() {
   require_root
   detect_os
   enable_bbr
+  disable_ipv6
   setup_public_dns
   setup_timezone
   ask_inputs

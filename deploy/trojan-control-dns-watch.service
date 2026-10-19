@@ -1,0 +1,10 @@
+[Unit]
+Description=Trojan control-plane role follow DNS A record
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/trojan-admin/ha.env
+ExecStart=/bin/bash -c 'exec "${INSTALL_DIR:-/opt/vps-trojan-service}/deploy/control-dns-watch.sh"'
+Nice=5

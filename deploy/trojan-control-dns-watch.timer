@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch control DNS every 5 minutes and auto promote/demote
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=trojan-control-dns-watch.service
+
+[Install]
+WantedBy=timers.target

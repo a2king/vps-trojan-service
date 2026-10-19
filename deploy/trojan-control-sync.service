@@ -1,0 +1,13 @@
+[Unit]
+Description=Trojan control-plane HA backup and sync to standby
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/trojan-admin/ha.env
+# INSTALL_DIR 来自 ha.env；未设置时默认 /opt/vps-trojan-service
+ExecStart=/bin/bash -c 'exec "${INSTALL_DIR:-/opt/vps-trojan-service}/deploy/control-sync.sh"'
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

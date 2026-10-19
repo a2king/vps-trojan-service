@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { api, sessionValid } from '../api'
 import { AdminNav } from './AdminNav'
 
 export function AdminLayout() {
@@ -9,7 +9,7 @@ export function AdminLayout() {
   const [domain, setDomain] = useState('')
 
   useEffect(() => {
-    if (!localStorage.getItem('token')) {
+    if (!sessionValid()) {
       navigate('/admin/login', { replace: true })
       return
     }

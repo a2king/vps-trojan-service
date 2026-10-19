@@ -85,11 +85,72 @@ npm run dev
 
 浏览器打开 `http://127.0.0.1:5173/` 看伪装首页，`/admin` 进管理台。Vite 会把 `/api` 代理到后端。
 
+## 主控主备（文件同步 HA）
+
+不引入网络数据库。后台「添加节点」会把那台机器装成**完整备机**（本机 Trojan + 管理后台），不再只靠主节点反向隧道做认证。
+
+- 装完后打开 `https://子节点域名/admin`，账号与主节点相同
+- 子节点代理查自己的 `127.0.0.1:13306`，用户、订阅、隧道配置来自主节点定期推送的库（默认 6 小时，安装结束会先推一次）
+- 主节点挂了之后，子节点代理和 `/admin` 仍可用，数据停在最后一次同步
+- 主节点在线时，同步以主节点库为准，会覆盖这段时间在备机后台里做的修改
+
+已经用旧方式装过的子节点，在节点页对该机器再点一次重新安装，才会变成备机。旧节点在重装前仍走反向隧道。
+
+另外仍可用管控域名 DNS 在两台**都跑过完整 install.sh** 的机器之间切换主备（`control-dns-watch`）。页面添加的备机不走这条隧道。
+
+约束：
+
+- 同一时刻只有一台 `CONTROL_ROLE=primary`（会拉子节点反向隧道）
+- 备控 `CONTROL_ROLE=standby`：不拉隧道、不跑流量/IP 采集
+- 最多丢失一个同步周期内的写入（默认每 6 小时）
+- 主备 `.env` 里的 `DOMAIN` 建议与管控/订阅域名一致
+- DNS 切换后最多约 5 分钟（再加解析 TTL）才会角色对齐
+
+### 一次性配置
+
+1. 备机同样执行 `install.sh`，装完后把 `.env` 改为 `CONTROL_ROLE=standby`，并 `systemctl restart trojan-admin`（或先停掉，只留同步目录待命）
+2. 保证主控能 SSH 到备机（可用主控 `backend/data/ssh` 密钥）
+3. **主备都配置** `/etc/trojan-admin/ha.env`：至少填 `CONTROL_LOCAL_IP=本机公网IP`；主控再填 `STANDBY_HOST`
+4. 主控启用同步 timer；**主备都启用** DNS 监听 timer：
+
+```bash
+sudo mkdir -p /etc/trojan-admin
+sudo cp deploy/ha.env.example /etc/trojan-admin/ha.env
+sudo chmod 600 /etc/trojan-admin/ha.env
+# 编辑 CONTROL_LOCAL_IP / STANDBY_HOST / INSTALL_DIR 等
+sudo chmod +x deploy/control-*.sh deploy/control-common.sh
+sudo cp deploy/trojan-control-sync.service deploy/trojan-control-sync.timer \
+  deploy/trojan-control-dns-watch.service deploy/trojan-control-dns-watch.timer \
+  /etc/systemd/system/
+sudo systemctl daemon-reload
+# 仅主控需要 sync timer；DNS watch 主备都开
+sudo systemctl enable --now trojan-control-sync.timer          # 主控
+sudo systemctl enable --now trojan-control-dns-watch.timer     # 主备
+sudo systemctl start trojan-control-sync.service               # 立刻试同步
+sudo systemctl start trojan-control-dns-watch.service          # 立刻试 DNS 对齐
+```
+
+同步落盘位置默认：备机 `/var/lib/trojan-admin/ha-incoming/`（`trojan.db` + `ssh/`）。
+
+### 故障切换（推荐：只改 DNS）
+
+1. 在域名网站把管控域名 A 记录改成备机公网 IP（TTL 建议 60–300s）
+2. 等待最多约 5 分钟：备机发现解析指向自己 → 自动 `promote`；旧主发现解析已离开 → 自动 `demote`
+3. 抽查：`/api/health`（应含 `"control_role":"primary"`）、订阅、任选子节点新连 Trojan
+
+仍可手动：`control-promote.sh` / `control-promote.sh --demote`。
+
+### 回切
+
+把域名 A 记录改回原主控 IP 即可，双方 DNS watch 会自动交换角色。若原主长时间离线，先确认它已收到较新 sync（或接受数据回退），再改 DNS。
+
+相关脚本：`control-backup.sh`、`control-sync.sh`、`control-promote.sh`、`control-dns-watch.sh`、`ha.env.example`。
+
 ## 目录
 
 ```
 install.sh          VPS 一键安装
-deploy/             nginx / trojan / systemd / logrotate 模板
+deploy/             nginx / trojan / systemd / HA 同步与 logrotate 模板
 backend/            FastAPI + uv + SQLite
 frontend/           React 伪装站 + 管理台
 ```

@@ -105,6 +105,8 @@ class Vps(Base):
     ssh_port: Mapped[int] = mapped_column(Integer, nullable=False, default=22)
     ssh_user: Mapped[str] = mapped_column(String(64), nullable=False, default="root")
     is_local: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 1=页面安装的完整备机（本机后台+代理），认证不走主节点反向隧道
+    replica: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     hidden: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     last_error: Mapped[str] = mapped_column(Text, nullable=False, default="")
