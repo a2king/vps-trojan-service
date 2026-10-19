@@ -108,6 +108,18 @@ check_ports() {
   fi
 }
 
+disable_ipv6() {
+  green "关闭 IPv6…"
+  mkdir -p /etc/sysctl.d
+  install -m 644 "${INSTALL_DIR}/deploy/disable-ipv6.conf" /etc/sysctl.d/99-disable-ipv6.conf
+  sysctl -p /etc/sysctl.d/99-disable-ipv6.conf >/dev/null 2>&1 || true
+  if [[ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)" == "1" ]]; then
+    green "IPv6 已关闭"
+  else
+    red "IPv6 未能关闭，请检查内核是否允许 sysctl"
+  fi
+}
+
 enable_bbr() {
   green "开启 TCP BBR 加速…"
   local major minor
@@ -416,6 +428,42 @@ setup_log() {
   chmod 644 /var/log/trojan.log
 }
 
+setup_standby_admin() {
+  [[ "${STANDBY_ADMIN:-}" == "1" ]] || return 0
+  green "安装备机管理后台…"
+  if [[ ! -f "${INSTALL_DIR}/backend/pyproject.toml" || ! -f "${INSTALL_DIR}/frontend/dist/index.html" ]]; then
+    red "安装包缺少 backend 或 frontend/dist，无法作为备机"
+    exit 1
+  fi
+  if [[ ! -f "${INSTALL_DIR}/.env" ]]; then
+    red "缺少 ${INSTALL_DIR}/.env"
+    exit 1
+  fi
+  mkdir -p "${INSTALL_DIR}/backend/data"
+  if [[ -f "${INSTALL_DIR}/seed/trojan.db" ]]; then
+    cp -a "${INSTALL_DIR}/seed/trojan.db" "${INSTALL_DIR}/backend/data/trojan.db"
+    chmod 600 "${INSTALL_DIR}/backend/data/trojan.db"
+    rm -f "${INSTALL_DIR}/backend/data/trojan.db-wal" "${INSTALL_DIR}/backend/data/trojan.db-shm"
+  fi
+  local html="/usr/share/nginx/html"
+  ln -sfn "${INSTALL_DIR}/frontend/dist" "$html"
+  if ! command -v uv >/dev/null 2>&1; then
+    green "安装 uv…"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  fi
+  export PATH="/root/.local/bin:${HOME}/.local/bin:${PATH}"
+  (
+    cd "${INSTALL_DIR}/backend"
+    uv python install 3.12
+    uv sync --python 3.12
+  )
+  export INSTALL_DIR NGINX_USER
+  render "${INSTALL_DIR}/deploy/trojan-admin.service.tpl" /etc/systemd/system/trojan-admin.service
+  touch /var/log/trojan-admin.log
+  chmod 644 /var/log/trojan-admin.log
+  systemctl daemon-reload
+}
+
 require_root
 detect_os
 
@@ -427,6 +475,7 @@ TROJAN_FALLBACK_PASSWORD="${TROJAN_FALLBACK_PASSWORD:-node-fallback}"
 export DOMAIN INSTALL_DIR NGINX_USER MYSQL_USERNAME TROJAN_FALLBACK_PASSWORD ACME_EMAIL
 
 enable_bbr
+disable_ipv6
 setup_public_dns
 setup_timezone
 enable_ssh_forwarding
@@ -439,12 +488,32 @@ write_camouflage
 write_nginx "${INSTALL_DIR}/deploy/nginx-bootstrap.conf.tpl"
 issue_cert
 install_trojan_bin
+setup_standby_admin
 write_nginx "${INSTALL_DIR}/deploy/nginx-node.conf.tpl"
 systemctl enable nginx trojan
 systemctl restart nginx
+if [[ "${STANDBY_ADMIN:-}" == "1" ]]; then
+  systemctl enable trojan-admin
+  systemctl restart trojan-admin
+  green "等待备机后台…"
+  ready=0
+  for _ in $(seq 1 40); do
+    if curl -fsS --max-time 2 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 2
+  done
+  [[ "$ready" == "1" ]] || { red "备机后台未启动，请查看 /var/log/trojan-admin.log"; exit 1; }
+fi
 systemctl restart trojan
 
 echo
 green "节点安装完成"
 green "域名: ${DOMAIN}"
-blue "Trojan 认证走本机 127.0.0.1:13306（由主机器反向隧道提供）"
+if [[ "${STANDBY_ADMIN:-}" == "1" ]]; then
+  green "管理后台: https://${DOMAIN}/admin"
+  blue "本机 Trojan 认证走 127.0.0.1:13306（备机自己的数据库，主节点会定期同步）"
+else
+  blue "Trojan 认证走本机 127.0.0.1:13306（由主机器反向隧道提供）"
+fi

@@ -54,9 +54,9 @@ code, .mono { font-family: var(--mono); }
   border: 0;
   background: rgba(0, 0, 0, 0.05);
   color: var(--admin-text);
-  padding: 8px 14px;
+  padding: 4px 10px;
   border-radius: 980px;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 510;
   letter-spacing: -0.01em;
   transition: transform 100ms ease-out, background 180ms var(--ease), opacity 180ms var(--ease);

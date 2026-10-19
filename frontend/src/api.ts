@@ -165,6 +165,22 @@ function detailMessage(detail: unknown): string {
   return '请求失败'
 }
 
+export function clearSession() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('username')
+  localStorage.removeItem('token_expires_at')
+}
+
+export function sessionValid(): boolean {
+  const token = localStorage.getItem('token')
+  const expiresAt = Number(localStorage.getItem('token_expires_at') || 0)
+  if (!token || !Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
+    clearSession()
+    return false
+  }
+  return true
+}
+
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('token')
   const headers = new Headers(init.headers)
@@ -175,8 +191,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 
   const res = await fetch(path, { ...init, headers })
   if (res.status === 401 && !path.includes('/api/auth/login')) {
-    localStorage.removeItem('token')
-    localStorage.removeItem('username')
+    clearSession()
     window.location.assign('/admin/login')
     throw new Error('未登录')
   }
@@ -189,10 +204,10 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 }
 
 export const api = {
-  login: (username: string, password: string) =>
-    request<{ token: string; username: string }>('/api/auth/login', {
+  login: (username: string, password: string, expireHours: number) =>
+    request<{ token: string; username: string; expire_hours: number }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, expire_hours: expireHours }),
     }),
   me: () => request<{ username: string; domain: string }>('/api/auth/me'),
   overview: () => request<Overview>('/api/overview'),

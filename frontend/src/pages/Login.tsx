@@ -1,17 +1,24 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { api, sessionValid } from '../api'
+
+const EXPIRE_OPTIONS = [
+  { hours: 24, label: '24 小时' },
+  { hours: 168, label: '7 天' },
+  { hours: 720, label: '30 天' },
+]
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const [username, setUsername] = useState('admin')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [expireHours, setExpireHours] = useState(24)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     document.title = '管理登录'
-    if (localStorage.getItem('token')) navigate('/admin', { replace: true })
+    if (sessionValid()) navigate('/admin', { replace: true })
   }, [navigate])
 
   async function onSubmit(event: FormEvent) {
@@ -19,9 +26,10 @@ export function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const result = await api.login(username.trim(), password)
+      const result = await api.login(username.trim(), password, expireHours)
       localStorage.setItem('token', result.token)
       localStorage.setItem('username', result.username)
+      localStorage.setItem('token_expires_at', String(Date.now() + result.expire_hours * 3600 * 1000))
       navigate('/admin', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败')
@@ -49,6 +57,21 @@ export function LoginPage() {
             autoComplete="current-password"
           />
         </label>
+        <div className="field">
+          <span>登录有效期</span>
+          <div className="expire-choices">
+            {EXPIRE_OPTIONS.map((item) => (
+              <button
+                key={item.hours}
+                type="button"
+                className={item.hours === expireHours ? 'on' : ''}
+                onClick={() => setExpireHours(item.hours)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <button className="btn primary" type="submit" disabled={loading} style={{ width: '100%' }}>
           {loading ? '登录中…' : '登录'}
         </button>

@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     trojan_mysql_host: str = "127.0.0.1"
     trojan_mysql_port: int = 13306
 
+    # 主控角色：primary 负责写库并向备机同步；standby 是页面装上的完整备机
+    control_role: str = "primary"
+    # 向各备机推送 SQLite 快照的间隔（秒）
+    replica_sync_interval_seconds: int = 21600
+
     traffic_interval_seconds: int = 300
     ip_ingest_interval_seconds: int = 3600
     log_retention_days: int = 31
@@ -46,6 +51,10 @@ class Settings(BaseSettings):
         if not path.is_absolute():
             path = Path.cwd() / path
         return path
+
+    @property
+    def is_control_primary(self) -> bool:
+        return (self.control_role or "primary").strip().lower() == "primary"
 
 
 @lru_cache

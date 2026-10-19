@@ -95,8 +95,31 @@ def seed_local_vps(db: Session) -> Vps | None:
         row.name = default_node_name()
         db.commit()
         db.refresh(row)
+    retarget_local_role(db)
     backfill_missing_assignments(db)
     return row
+
+
+def retarget_local_role(db: Session) -> None:
+    """备机上把本机域名标成本地节点，避免沿用主库里的 is_local。"""
+    if settings.is_control_primary:
+        return
+    domain = local_vps_id()
+    if not domain:
+        return
+    changed = False
+    for row in list_vps(db):
+        if row.id == domain:
+            if row.is_local != 1 or (row.ssh_host or "") != "127.0.0.1":
+                row.is_local = 1
+                row.ssh_host = "127.0.0.1"
+                row.status = "online"
+                changed = True
+        elif row.is_local:
+            row.is_local = 0
+            changed = True
+    if changed:
+        db.commit()
 
 
 def assign_default_nodes(db: Session, account_id: int, *, include_hidden: bool = False) -> None:

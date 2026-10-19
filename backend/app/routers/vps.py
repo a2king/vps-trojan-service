@@ -51,6 +51,7 @@ def create_node(body: VpsCreate, db: Session = Depends(get_db)) -> VpsOut:
         ssh_port=int(body.ssh_port or 22),
         ssh_user=(body.ssh_user or "root").strip() or "root",
         is_local=0,
+        replica=1,
         hidden=1 if body.hidden else 0,
         status="installing",
         last_error="",
