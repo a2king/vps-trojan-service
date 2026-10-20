@@ -190,7 +190,7 @@ export function RulesPage() {
 
   return (
     <>
-      <main className="admin-main">
+      <main className="admin-main rules-page">
         <section className="panel">
           <div className="panel-head">
             <h2>客户端参数</h2>
@@ -220,7 +220,7 @@ export function RulesPage() {
           ) : null}
         </section>
 
-        <section className="panel" style={{ marginTop: 18 }}>
+        <section className="panel rules-panel">
           <div className="panel-head">
             <h2>规则列表 · {filtered.length}/{rules.length}</h2>
             <button className="btn" type="button" onClick={() => { setImportOpen(true); setPreview(null) }}>

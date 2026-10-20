@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "change-me"
     jwt_secret: str = "please-change-this-to-a-long-random-string"
-    jwt_expire_hours: int = 168
+    jwt_expire_hours: int = 24
 
     domain: str = "example.com"
     trojan_port: int = 443

@@ -204,10 +204,10 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 }
 
 export const api = {
-  login: (username: string, password: string, expireHours: number) =>
-    request<{ token: string; username: string; expire_hours: number }>('/api/auth/login', {
+  login: (username: string, password: string) =>
+    request<{ token: string; username: string }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password, expire_hours: expireHours }),
+      body: JSON.stringify({ username, password }),
     }),
   me: () => request<{ username: string; domain: string }>('/api/auth/me'),
   overview: () => request<Overview>('/api/overview'),
