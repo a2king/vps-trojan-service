@@ -74,7 +74,6 @@ DOMAIN-SUFFIX,cursor-cdn.com,PROXY-AI
 DOMAIN,download.todesktop.com,PROXY-AI
 DOMAIN-SUFFIX,download.todesktop.com,PROXY-AI
 DOMAIN-SUFFIX,cursor.sh,PROXY-AI
-DOMAIN-SUFFIX,caoyugangsg.top,DIRECT
 DOMAIN-SUFFIX,m7ai.com,DIRECT
 DOMAIN-SUFFIX,dingtalk.com,DIRECT
 DOMAIN-SUFFIX,alicdn.com,DIRECT

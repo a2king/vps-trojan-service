@@ -29,16 +29,10 @@ def verify_admin_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-LOGIN_EXPIRE_HOURS = (24, 168, 720)
-
-
-def create_access_token(username: str, hours: int | None = None) -> tuple[str, int]:
-    chosen = int(hours if hours is not None else settings.jwt_expire_hours)
-    if chosen not in LOGIN_EXPIRE_HOURS:
-        chosen = 24
-    expire = datetime.now(timezone.utc) + timedelta(hours=chosen)
+def create_access_token(username: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
     payload = {"sub": username, "exp": expire}
-    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM), chosen
+    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> str | None:

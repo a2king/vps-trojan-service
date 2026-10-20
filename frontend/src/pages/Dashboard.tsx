@@ -183,18 +183,21 @@ export function DashboardPage() {
               缓存 {formatBytes(info.memory.cached)} · 缓冲 {formatBytes(info.memory.buffers)}
             </p>
           ) : null}
-          {info && info.memory.swap_total > 0 ? (
-            <div className="swap-block">
-              <div className="usage-head compact">
-                <em>Swap</em>
-                <strong>{info.memory.swap_percent.toFixed(1)}%</strong>
-              </div>
-              <Meter percent={info.memory.swap_percent} />
-              <p className="usage-meta">
-                {formatBytes(info.memory.swap_used)} / {formatBytes(info.memory.swap_total)}
-              </p>
-            </div>
-          ) : null}
+        </section>
+
+        <section className="panel usage-card">
+          <div className="usage-head">
+            <em>Swap</em>
+            <strong>{info ? `${info.memory.swap_percent.toFixed(1)}%` : '—'}</strong>
+          </div>
+          <Meter percent={info?.memory.swap_percent ?? 0} />
+          <p className="usage-meta">
+            {info
+              ? info.memory.swap_total > 0
+                ? `${formatBytes(info.memory.swap_used)} / ${formatBytes(info.memory.swap_total)}`
+                : '未启用'
+              : '读取中'}
+          </p>
         </section>
 
         <section className="panel usage-card">
