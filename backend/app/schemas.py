@@ -40,6 +40,11 @@ class UserIpOut(BaseModel):
     last_seen_at: str
 
 
+class ReplicaPushError(BaseModel):
+    vps_id: str
+    error: str
+
+
 class UserOut(BaseModel):
     id: int
     name: str
@@ -57,6 +62,7 @@ class UserOut(BaseModel):
     month_download: int
     month_upload: int
     group_nodes: dict[str, list[str]] = Field(default_factory=dict)
+    replica_push_errors: list[ReplicaPushError] = Field(default_factory=list)
 
 
 class Overview(BaseModel):
@@ -184,6 +190,7 @@ class VpsCreate(BaseModel):
     ssh_password: str = Field(min_length=1, max_length=256)
     name: str = Field(default="", max_length=128)
     hidden: bool = False
+    apply_groups: list[str] | None = None
 
 
 class VpsUpdate(BaseModel):
@@ -199,6 +206,7 @@ class VpsLogOut(BaseModel):
 
 class VpsRedeploy(BaseModel):
     ssh_password: str = Field(default="", max_length=256)
+    apply_groups: list[str] | None = None
 
 
 class TunnelProxyOut(BaseModel):

@@ -41,16 +41,19 @@ def _vps_id_for_mysql_user(username: str) -> str:
     return name
 
 
-def _account_allowed(password: str, vps_id: str) -> bool:
+def _auth_status(password: str, vps_id: str) -> str:
+    """返回 allow / unknown / disabled / denied_acl。"""
     if not vps_id:
-        return True
+        return "allow"
     with engine.begin() as conn:
         row = conn.execute(
             text("SELECT id, enabled FROM accounts WHERE password_sha224 = :password"),
             {"password": password},
         ).first()
-        if row is None or int(row[1] or 0) != 1:
-            return False
+        if row is None:
+            return "unknown"
+        if int(row[1] or 0) != 1:
+            return "disabled"
         assigned = conn.execute(
             text(
                 "SELECT 1 FROM account_group_vps WHERE account_id = :account_id AND vps_id = :vps_id LIMIT 1"
@@ -58,7 +61,7 @@ def _account_allowed(password: str, vps_id: str) -> bool:
             {"account_id": int(row[0]), "vps_id": vps_id},
         ).first()
         if assigned is not None:
-            return True
+            return "allow"
         hop = conn.execute(
             text(
                 "SELECT 1 FROM account_group_tunnels t "
@@ -68,7 +71,7 @@ def _account_allowed(password: str, vps_id: str) -> bool:
             {"account_id": int(row[0]), "vps_id": vps_id},
         ).first()
         if hop is not None:
-            return True
+            return "allow"
         any_row = conn.execute(
             text("SELECT 1 FROM account_group_vps WHERE account_id = :account_id LIMIT 1"),
             {"account_id": int(row[0])},
@@ -78,7 +81,13 @@ def _account_allowed(password: str, vps_id: str) -> bool:
             {"account_id": int(row[0])},
         ).first()
         local_id = (settings.domain or "").strip().lower()
-        return any_row is None and any_tunnel is None and vps_id == local_id
+        if any_row is None and any_tunnel is None and vps_id == local_id:
+            return "allow"
+        return "denied_acl"
+
+
+def _account_allowed(password: str, vps_id: str) -> bool:
+    return _auth_status(password, vps_id) == "allow"
 
 
 def handle_trojan_sql(sql: str, mysql_user: str = "") -> tuple[list, list[str]]:
@@ -87,14 +96,21 @@ def handle_trojan_sql(sql: str, mysql_user: str = "") -> tuple[list, list[str]]:
     matched = SELECT_RE.search(statement)
     if matched:
         password = matched.group(1)
-        if not _account_allowed(password, vps_id):
+        prefix = password[:7]
+        status = _auth_status(password, vps_id)
+        if status == "denied_acl":
+            logger.info("denied by node acl password=%s vps=%s", prefix, vps_id)
+            return [], ["quota", "download + upload"]
+        if status == "disabled":
+            logger.info("account disabled password=%s vps=%s", prefix, vps_id)
             return [], ["quota", "download + upload"]
         with engine.begin() as conn:
             row = conn.execute(
                 text("SELECT quota, download + upload FROM users WHERE password = :password"),
                 {"password": password},
             ).first()
-        if row is None:
+        if row is None or status == "unknown":
+            logger.info("incorrect password password=%s vps=%s", prefix, vps_id)
             return [], ["quota", "download + upload"]
         return [(int(row[0]), int(row[1]))], ["quota", "download + upload"]
 

@@ -15,6 +15,7 @@ export type User = {
   month_download: number
   month_upload: number
   group_nodes: Record<string, string[]>
+  replica_push_errors?: { vps_id: string; error: string }[]
 }
 
 export type Overview = {
@@ -222,6 +223,7 @@ export const api = {
     ssh_password: string
     name?: string
     hidden?: boolean
+    apply_groups?: string[] | null
   }) => request<VpsNode>('/api/vps', { method: 'POST', body: JSON.stringify(payload) }),
   updateVps: (id: string, payload: { name?: string; hidden?: boolean }) =>
     request<VpsNode>(`/api/vps/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),

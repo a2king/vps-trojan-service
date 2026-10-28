@@ -6,6 +6,8 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 from app.config import get_settings
 from app.database import SessionLocal
 from app.models import Vps
@@ -86,25 +88,59 @@ def push_replica(vps: Vps, snapshot: Path) -> None:
         client.close()
 
 
-def sync_replicas() -> None:
+def _set_last_error(db: Session, row: Vps, error: str) -> None:
+    row.last_error = error
+    db.commit()
+
+
+def push_online_replicas(db: Session | None = None) -> list[tuple[str, str]]:
+    """把当前主库快照推到 replica=1 且 online 的节点。失败写入 vps.last_error，返回 [(vps_id, error)]。"""
     if not settings.is_control_primary:
-        return
-    db = SessionLocal()
+        return []
+    own = db is None
+    session = db if db is not None else SessionLocal()
     try:
         rows = (
-            db.query(Vps)
+            session.query(Vps)
             .filter(Vps.is_local == 0, Vps.replica == 1, Vps.status == "online")
             .all()
         )
         if not rows:
-            return
+            return []
         snapshot = settings.sqlite_path.parent / "replica-snapshot.db"
-        backup_sqlite(snapshot)
+        try:
+            backup_sqlite(snapshot)
+        except Exception as exc:
+            message = str(exc) or exc.__class__.__name__
+            logger.exception("备机快照失败")
+            errors = []
+            for row in rows:
+                try:
+                    _set_last_error(session, row, message)
+                except Exception:
+                    session.rollback()
+                errors.append((row.id, message))
+            return errors
+        errors: list[tuple[str, str]] = []
         for row in rows:
             try:
                 push_replica(row, snapshot)
+                if row.last_error:
+                    _set_last_error(session, row, "")
                 logger.info("已同步备机 %s", row.id)
-            except Exception:
+            except Exception as exc:
+                message = str(exc) or exc.__class__.__name__
                 logger.exception("同步备机失败：%s", row.id)
+                try:
+                    _set_last_error(session, row, message)
+                except Exception:
+                    session.rollback()
+                errors.append((row.id, message))
+        return errors
     finally:
-        db.close()
+        if own:
+            session.close()
+
+
+def sync_replicas() -> None:
+    push_online_replicas()

@@ -144,6 +144,54 @@ def assign_default_nodes(db: Session, account_id: int, *, include_hidden: bool =
     db.flush()
 
 
+def resolve_apply_groups(db: Session, apply_groups: list[str] | None = None) -> list[str]:
+    """解析要绑定的 PROXY 相关分组：默认全部占位组，请求可带 apply_groups 子集。"""
+    allowed = placeholder_group_names(db)
+    if apply_groups is None:
+        return allowed
+    wanted = {str(name).strip() for name in apply_groups if str(name or "").strip()}
+    return [name for name in allowed if name in wanted]
+
+
+def bind_vps_to_proxy_groups(
+    db: Session,
+    vps_id: str,
+    apply_groups: list[str] | None = None,
+    *,
+    commit: bool = True,
+) -> list[str]:
+    """把新节点写入已有 PROXY 相关分组的 account_group_vps（只补已有分组，不给零绑定账号开组）。"""
+    node_id = normalize_domain(vps_id)
+    if not node_id or db.get(Vps, node_id) is None:
+        return []
+    groups = resolve_apply_groups(db, apply_groups)
+    if not groups:
+        return []
+    group_set = set(groups)
+    existing_pairs = {
+        (int(row.account_id), row.group_name)
+        for row in db.execute(select(AccountGroupVps)).scalars().all()
+    }
+    existing_pairs |= {
+        (int(row.account_id), row.group_name)
+        for row in db.execute(select(AccountGroupTunnel)).scalars().all()
+    }
+    already = {
+        (int(row.account_id), row.group_name)
+        for row in db.execute(select(AccountGroupVps).where(AccountGroupVps.vps_id == node_id)).scalars().all()
+    }
+    for account_id, group_name in existing_pairs:
+        if group_name not in group_set or (account_id, group_name) in already:
+            continue
+        db.add(AccountGroupVps(account_id=account_id, group_name=group_name, vps_id=node_id))
+        already.add((account_id, group_name))
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return groups
+
+
 def backfill_missing_assignments(db: Session) -> None:
     groups = placeholder_group_names(db)
     if not groups:

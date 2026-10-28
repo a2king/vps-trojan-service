@@ -186,7 +186,12 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
       )
       setCurrent(next)
       onChanged(next)
-      toast('节点策略已保存')
+      const pushErrors = next.replica_push_errors || []
+      if (pushErrors.length) {
+        toast(`节点策略已保存，但备机同步失败：${pushErrors.map((item) => item.vps_id).join('、')}`)
+      } else {
+        toast('节点策略已保存')
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : '保存失败')
     } finally {

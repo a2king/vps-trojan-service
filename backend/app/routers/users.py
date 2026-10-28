@@ -7,11 +7,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_admin
 from app.models import Account, AccountGroupTunnel, AccountGroupVps, AccountIp, Admin, TrafficDaily, TrafficSnapshot, TrojanUser
-from app.schemas import Overview, PasswordReset, TrafficPoint, UserCreate, UserIpOut, UserNodesUpdate, UserOut, UserUpdate
+from app.schemas import Overview, PasswordReset, ReplicaPushError, TrafficPoint, UserCreate, UserIpOut, UserNodesUpdate, UserOut, UserUpdate
 from app.security import generate_password, sha224_hex
 from app.services import get_trojan_user, set_trojan_enabled, to_user_out
 from app.services.ips import list_account_ips
 from app.services.nodes import assign_default_nodes, replace_group_nodes
+from app.services.replica_sync import push_online_replicas
 from app.services.traffic import collect_traffic, daily_map, month_start, month_totals, overview_stats, series_daily, series_monthly
 from app.timeutil import now_local, to_iso
 
@@ -195,4 +196,7 @@ def user_ips(user_id: int, db: Session = Depends(get_db)) -> list[UserIpOut]:
 def update_user_nodes(user_id: int, body: UserNodesUpdate, db: Session = Depends(get_db)) -> UserOut:
     account = _get_account(db, user_id)
     replace_group_nodes(db, account.id, [(item.group_name, item.vps_ids) for item in body.groups])
-    return _stats_for_accounts(db, [account])[0]
+    errors = push_online_replicas(db)
+    out = _stats_for_accounts(db, [account])[0]
+    out.replica_push_errors = [ReplicaPushError(vps_id=vps_id, error=message) for vps_id, message in errors]
+    return out

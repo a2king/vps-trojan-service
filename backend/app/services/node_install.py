@@ -14,8 +14,8 @@ from app.database import SessionLocal
 from app.models import Vps
 from app.paths import repo_root
 from app.services import install_logs, ssh
-from app.services.nodes import normalize_domain
-from app.services.replica_sync import backup_sqlite, push_replica
+from app.services.nodes import bind_vps_to_proxy_groups, normalize_domain
+from app.services.replica_sync import backup_sqlite, push_online_replicas
 
 logger = logging.getLogger("trojan-admin")
 settings = get_settings()
@@ -194,7 +194,7 @@ def _set_status(db: Session, vps_id: str, status: str, error: str = "") -> None:
     db.commit()
 
 
-def install_remote(vps_id: str, password: str | None = None) -> None:
+def install_remote(vps_id: str, password: str | None = None, apply_groups: list[str] | None = None) -> None:
     db = SessionLocal()
     try:
         row = db.get(Vps, normalize_domain(vps_id))
@@ -203,6 +203,10 @@ def install_remote(vps_id: str, password: str | None = None) -> None:
         vps_id = row.id
         row.replica = 1
         db.commit()
+        try:
+            bind_vps_to_proxy_groups(db, vps_id, apply_groups)
+        except Exception:
+            logger.exception("装机前自动绑组失败：%s", vps_id)
         password = (password or "").strip() or None
         install_logs.clear_log(vps_id)
         _set_status(db, vps_id, "installing")
@@ -264,11 +268,19 @@ def install_remote(vps_id: str, password: str | None = None) -> None:
         row.status = "online"
         row.last_error = ""
         db.commit()
+        log("绑定新节点到已有 PROXY 分组")
+        try:
+            bound = bind_vps_to_proxy_groups(db, vps_id, apply_groups)
+            log(f"已写入分组：{', '.join(bound) if bound else '无'}")
+        except Exception as exc:
+            log(f"自动绑组失败：{exc}")
         log("同步账号与配置到备机")
         try:
-            snapshot = settings.sqlite_path.parent / "replica-snapshot.db"
-            backup_sqlite(snapshot)
-            push_replica(row, snapshot)
+            errors = push_online_replicas(db)
+            for failed_id, message in errors:
+                log(f"同步失败 {failed_id}：{message}")
+            if not errors:
+                log("备机同步完成")
         except Exception as exc:
             log(f"首次同步失败（安装包里的快照仍可用，稍后会自动重试）：{exc}")
         log(f"安装完成。管理后台：https://{row.id}/admin （本机认证，不依赖主节点隧道）")
@@ -283,10 +295,15 @@ def install_remote(vps_id: str, password: str | None = None) -> None:
         db.close()
 
 
-def start_install_job(vps_id: str, password: str | None = None) -> None:
+def start_install_job(vps_id: str, password: str | None = None, apply_groups: list[str] | None = None) -> None:
     existing = _jobs.get(vps_id)
     if existing is not None and existing.is_alive():
         raise RuntimeError("该节点正在安装")
-    thread = threading.Thread(target=install_remote, args=(vps_id, password), daemon=True, name=f"install-{vps_id}")
+    thread = threading.Thread(
+        target=install_remote,
+        args=(vps_id, password, apply_groups),
+        daemon=True,
+        name=f"install-{vps_id}",
+    )
     _jobs[vps_id] = thread
     thread.start()

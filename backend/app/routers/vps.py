@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,7 @@ from app.models import Admin, Vps
 from app.schemas import VpsCreate, VpsLogOut, VpsOut, VpsRedeploy, VpsUpdate
 from app.services import install_logs, node_install, ssh
 from app.services.nodes import (
+    bind_vps_to_proxy_groups,
     get_vps,
     is_valid_domain,
     list_vps,
@@ -20,6 +23,7 @@ from app.services.tunnels import tunnels_using_vps
 from app.timeutil import now_local
 
 router = APIRouter(prefix="/api/vps", tags=["vps"], dependencies=[Depends(get_current_admin)])
+logger = logging.getLogger("trojan-admin")
 
 
 def _out(row: Vps) -> VpsOut:
@@ -61,7 +65,11 @@ def create_node(body: VpsCreate, db: Session = Depends(get_db)) -> VpsOut:
     db.commit()
     db.refresh(row)
     try:
-        node_install.start_install_job(row.id, body.ssh_password)
+        bind_vps_to_proxy_groups(db, row.id, body.apply_groups)
+    except Exception:
+        logger.exception("创建节点后自动绑组失败：%s", row.id)
+    try:
+        node_install.start_install_job(row.id, body.ssh_password, body.apply_groups)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _out(row)
@@ -116,12 +124,17 @@ def redeploy_node(vps_id: str, body: VpsRedeploy | None = None, db: Session = De
     if row.status == "installing":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该节点正在安装")
     password = (body.ssh_password if body else "") or ""
+    apply_groups = body.apply_groups if body else None
     row.status = "installing"
     row.last_error = ""
     db.commit()
     db.refresh(row)
     try:
-        node_install.start_install_job(row.id, password)
+        bind_vps_to_proxy_groups(db, row.id, apply_groups)
+    except Exception:
+        logger.exception("重新部署前自动绑组失败：%s", row.id)
+    try:
+        node_install.start_install_job(row.id, password, apply_groups)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _out(row)
