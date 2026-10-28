@@ -12,6 +12,7 @@ from app.security import generate_password, sha224_hex
 from app.services import get_trojan_user, set_trojan_enabled, to_user_out
 from app.services.ips import list_account_ips
 from app.services.nodes import assign_default_nodes, replace_group_nodes
+from app.services.replica_sync import push_replicas_after_acl_commit
 from app.services.traffic import collect_traffic, daily_map, month_start, month_totals, overview_stats, series_daily, series_monthly
 from app.timeutil import now_local, to_iso
 
@@ -100,6 +101,7 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)) -> UserOut:
     assign_default_nodes(db, account.id)
     db.commit()
     db.refresh(account)
+    push_replicas_after_acl_commit()
     return _stats_for_accounts(db, [account])[0]
 
 
@@ -168,6 +170,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
         db.delete(trojan)
     db.delete(account)
     db.commit()
+    push_replicas_after_acl_commit()
 
 
 @router.get("/users/{user_id}/traffic", response_model=list[TrafficPoint])
