@@ -144,6 +144,30 @@ def assign_default_nodes(db: Session, account_id: int, *, include_hidden: bool =
     db.flush()
 
 
+def bind_vps_to_existing_groups(db: Session, vps_id: str) -> int:
+    """新备机加入后，把它补进每个账号里已经有 VPS 绑定的策略组，不改没绑过节点的组。"""
+    node_id = normalize_domain(vps_id)
+    if not node_id or db.get(Vps, node_id) is None:
+        return 0
+    rows = list(db.execute(select(AccountGroupVps)).scalars().all())
+    existing = {(row.account_id, row.group_name, row.vps_id) for row in rows}
+    groups_by_account: dict[int, set[str]] = {}
+    for row in rows:
+        groups_by_account.setdefault(row.account_id, set()).add(row.group_name)
+    added = 0
+    for account_id, groups in groups_by_account.items():
+        for group in groups:
+            key = (account_id, group, node_id)
+            if key in existing:
+                continue
+            db.add(AccountGroupVps(account_id=account_id, group_name=group, vps_id=node_id))
+            existing.add(key)
+            added += 1
+    if added:
+        db.flush()
+    return added
+
+
 def backfill_missing_assignments(db: Session) -> None:
     groups = placeholder_group_names(db)
     if not groups:
@@ -216,6 +240,9 @@ def replace_group_nodes(db: Session, account_id: int, groups: list[tuple[str, li
             seen.add((name, vps_id))
     db.flush()
     db.commit()
+    from app.services.replica_sync import push_replicas_after_acl_commit
+
+    push_replicas_after_acl_commit()
     return group_nodes_map(db, account_id)
 
 
