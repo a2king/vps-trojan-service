@@ -14,8 +14,8 @@ from app.database import SessionLocal
 from app.models import Vps
 from app.paths import repo_root
 from app.services import install_logs, ssh
-from app.services.nodes import normalize_domain
-from app.services.replica_sync import backup_sqlite, push_replica
+from app.services.nodes import bind_vps_to_existing_groups, normalize_domain
+from app.services.replica_sync import backup_sqlite, sync_replicas
 
 logger = logging.getLogger("trojan-admin")
 settings = get_settings()
@@ -260,15 +260,14 @@ def install_remote(vps_id: str, password: str | None = None) -> None:
         row = db.get(Vps, vps_id)
         if row is None:
             return
+        bind_vps_to_existing_groups(db, vps_id)
         row.replica = 1
         row.status = "online"
         row.last_error = ""
         db.commit()
         log("同步账号与配置到备机")
         try:
-            snapshot = settings.sqlite_path.parent / "replica-snapshot.db"
-            backup_sqlite(snapshot)
-            push_replica(row, snapshot)
+            sync_replicas()
         except Exception as exc:
             log(f"首次同步失败（安装包里的快照仍可用，稍后会自动重试）：{exc}")
         log(f"安装完成。管理后台：https://{row.id}/admin （本机认证，不依赖主节点隧道）")

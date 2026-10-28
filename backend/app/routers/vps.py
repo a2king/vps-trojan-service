@@ -9,6 +9,7 @@ from app.models import Admin, Vps
 from app.schemas import VpsCreate, VpsLogOut, VpsOut, VpsRedeploy, VpsUpdate
 from app.services import install_logs, node_install, ssh
 from app.services.nodes import (
+    bind_vps_to_existing_groups,
     get_vps,
     is_valid_domain,
     list_vps,
@@ -16,6 +17,7 @@ from app.services.nodes import (
     normalize_domain,
     to_vps_out,
 )
+from app.services.replica_sync import push_replicas_after_acl_commit
 from app.services.tunnels import tunnels_using_vps
 from app.timeutil import now_local
 
@@ -58,8 +60,11 @@ def create_node(body: VpsCreate, db: Session = Depends(get_db)) -> VpsOut:
         created_at=now_local(),
     )
     db.add(row)
+    db.flush()
+    bind_vps_to_existing_groups(db, row.id)
     db.commit()
     db.refresh(row)
+    push_replicas_after_acl_commit()
     try:
         node_install.start_install_job(row.id, body.ssh_password)
     except RuntimeError as exc:
@@ -95,6 +100,7 @@ def delete_node(vps_id: str, db: Session = Depends(get_db)) -> Response:
     node_install.stop_tunnel(row)
     db.delete(row)
     db.commit()
+    push_replicas_after_acl_commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
