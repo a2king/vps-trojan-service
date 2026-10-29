@@ -55,9 +55,9 @@ ha_control_dns_name() {
   if [[ -z "$name" ]]; then
     name="$(ha_env_get DOMAIN)"
   fi
-  name="${name%%/*}"
   name="${name#http://}"
   name="${name#https://}"
+  name="${name%%/*}"
   name="${name%%:*}"
   printf '%s\n' "$name"
 }
@@ -185,4 +185,37 @@ ha_stop_tunnels() {
       systemctl disable --now "$unit" 2>/dev/null || true
     done < <(systemctl list-units --type=service --all --no-legend 'trojan-tunnel@*' 2>/dev/null | awk '{print $1}')
   fi
+}
+
+ha_retarget_local_db() {
+  local domain="${1:-$(ha_env_get DOMAIN)}"
+  [[ -n "$domain" && -f "$DB_PATH" ]] || {
+    ha_red "无法重定位本机节点：缺少 DOMAIN 或数据库 ${DB_PATH}"
+    exit 1
+  }
+  python3 - "$DB_PATH" "$domain" <<'PY'
+import sqlite3
+import sys
+from datetime import datetime
+
+db_path, domain = sys.argv[1:]
+conn = sqlite3.connect(db_path)
+try:
+    conn.execute("UPDATE vps SET is_local=0")
+    row = conn.execute("SELECT id FROM vps WHERE id=?", (domain,)).fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO vps (id, name, ssh_host, ssh_port, ssh_user, is_local, replica, hidden, status, last_error, created_at) "
+            "VALUES (?, ?, '127.0.0.1', 22, 'root', 1, 0, 0, 'online', '', ?)",
+            (domain, domain.split('.')[0], datetime.now().isoformat()),
+        )
+    else:
+        conn.execute(
+            "UPDATE vps SET is_local=1, replica=0, ssh_host='127.0.0.1', ssh_port=22, ssh_user='root', status='online' WHERE id=?",
+            (domain,),
+        )
+    conn.commit()
+finally:
+    conn.close()
+PY
 }
