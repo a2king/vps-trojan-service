@@ -170,6 +170,7 @@ class VpsOut(BaseModel):
     ssh_port: int
     ssh_user: str
     is_local: bool
+    replica: bool
     hidden: bool
     status: str
     last_error: str
@@ -199,6 +200,12 @@ class VpsLogOut(BaseModel):
 
 class VpsRedeploy(BaseModel):
     ssh_password: str = Field(default="", max_length=256)
+
+
+class VpsPromotePrimaryOut(BaseModel):
+    target: str
+    status: str
+    message: str
 
 
 class TunnelProxyOut(BaseModel):

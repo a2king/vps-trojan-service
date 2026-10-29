@@ -29,6 +29,7 @@ from app.services.clash import (
     replace_rule,
     save_clash_settings,
 )
+from app.services.replica_sync import push_replicas_after_acl_commit
 
 router = APIRouter(prefix="/api/clash", tags=["clash"], dependencies=[Depends(get_current_admin)])
 
@@ -44,7 +45,9 @@ def read_settings(db: Session = Depends(get_db)) -> ClashSettingsOut:
 
 @router.put("/settings", response_model=ClashSettingsOut)
 def update_settings(body: ClashSettingsOut, db: Session = Depends(get_db)) -> ClashSettingsOut:
-    return ClashSettingsOut(settings=save_clash_settings(db, body.settings))
+    result = ClashSettingsOut(settings=save_clash_settings(db, body.settings))
+    push_replicas_after_acl_commit()
+    return result
 
 
 @router.get("/rules", response_model=list[ClashRuleOut])
@@ -61,6 +64,7 @@ def create_rule(body: ClashRuleCreate, db: Session = Depends(get_db)) -> ClashRu
     created = add_rules(db, [body.line], before_match=True)
     if not created:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="规则已存在或格式无效")
+    push_replicas_after_acl_commit()
     return _to_out(created[0])
 
 
@@ -72,6 +76,7 @@ def update_rule(rule_id: int, body: ClashRuleCreate, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    push_replicas_after_acl_commit()
     return _to_out(row)
 
 
@@ -81,6 +86,7 @@ def remove_rule(rule_id: int, db: Session = Depends(get_db)) -> Response:
         delete_rule(db, rule_id)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    push_replicas_after_acl_commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -90,6 +96,7 @@ def sort_rules(body: ClashReorder, db: Session = Depends(get_db)) -> list[ClashR
         rows = reorder_rules(db, body.ids)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    push_replicas_after_acl_commit()
     return [_to_out(row) for row in rows]
 
 
@@ -154,4 +161,5 @@ def confirm_import(body: ClashImportConfirm, db: Session = Depends(get_db)) -> l
     if not lines:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可添加的规则")
     created = add_rules(db, lines, before_match=True)
+    push_replicas_after_acl_commit()
     return [_to_out(row) for row in created]

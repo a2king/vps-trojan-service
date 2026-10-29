@@ -95,6 +95,9 @@ if [[ "$USE_INCOMING" -eq 1 ]]; then
   fi
 fi
 
+# 主备快照来自旧主，promote 后由部署脚本把当前机器标回本机，避免沿用旧主 is_local。
+ha_retarget_local_db "$(ha_env_get DOMAIN)"
+
 if [[ "$APPLY_ONLY" -eq 1 ]]; then
   ha_green "已套用快照（未改角色、未启动服务）"
   exit 0

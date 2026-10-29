@@ -15,6 +15,7 @@ export function NodesPage() {
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [busy, setBusy] = useState(false)
+  const [promotingId, setPromotingId] = useState<string | null>(null)
   const [domain, setDomain] = useState('')
   const [name, setName] = useState('')
   const [sshHost, setSshHost] = useState('')
@@ -156,6 +157,28 @@ export function NodesPage() {
     }
   }
 
+  async function promotePrimary(item: VpsNode) {
+    if (item.is_local || item.status !== 'online' || !item.replica) {
+      if (!item.is_local && !item.replica) notify('该节点不是完整备控，不能切换主节点')
+      return
+    }
+    if (!window.confirm(`将「${item.id}」设为主节点？系统会先备份并同步旧主数据，确认备机套用后停旧主隧道并降级，再 promote 新主。完成后需要把管控 DNS 指向新主。`)) {
+      return
+    }
+    setBusy(true)
+    setPromotingId(item.id)
+    setError('')
+    try {
+      const result = await api.promotePrimary(item.id)
+      notify(result.message || `已提交将 ${result.target} 设为主节点`)
+    } catch (err) {
+      notify(err instanceof Error ? err.message : '切换主节点失败')
+    } finally {
+      setBusy(false)
+      setPromotingId(null)
+    }
+  }
+
   async function remove(item: VpsNode) {
     if (item.is_local) return
     if (!window.confirm(`删除节点「${item.id}」？远端 Trojan 不会自动卸载。`)) return
@@ -238,7 +261,17 @@ export function NodesPage() {
                         />
                       </td>
                       <td className="num">{item.is_local ? '本机' : `${item.ssh_user}@${item.ssh_host}:${item.ssh_port}`}</td>
-                      <td>{item.is_local ? '主控' : item.hidden ? '高级' : '普通'}</td>
+                      <td>
+                        {item.is_local
+                          ? '主控'
+                          : item.replica
+                            ? item.hidden
+                              ? '完整备控（高级）'
+                              : '完整备控'
+                            : item.hidden
+                              ? '高级'
+                              : '普通'}
+                      </td>
                       <td>
                         <span className="badge">
                           <i className={`dot ${item.status === 'online' ? '' : item.status === 'error' ? 'off' : 'warn'}`} />
@@ -260,6 +293,15 @@ export function NodesPage() {
                                 onClick={() => redeploy(item)}
                               >
                                 {item.status === 'installing' ? '部署中…' : '重新部署'}
+                              </button>
+                              <button
+                                className="btn primary"
+                                type="button"
+                                disabled={busy || promotingId !== null || item.status !== 'online' || !item.replica}
+                                title={item.replica ? '按 HA 顺序切换主节点' : '该节点不是完整备控'}
+                                onClick={() => promotePrimary(item)}
+                              >
+                                {promotingId === item.id ? '切换中…' : item.replica ? '设为主节点' : '非备控'}
                               </button>
                             </>
                           )}
