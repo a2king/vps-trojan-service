@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 from pathlib import Path
@@ -192,7 +191,6 @@ def _remote_promote_watcher(client, install_dir: str, old_domain: str) -> str:
             "  sleep 1",
             "done",
             "case \"$health\" in *'\"control_role\":\"primary\"'*) ;; *) echo '新主健康检查失败' >&2; exit 31 ;; esac",
-            f"curl -fsS --max-time 5 -X POST http://127.0.0.1:8000/api/auth/login -H 'Content-Type: application/json' --data {shlex.quote(json.dumps({'username': settings.admin_username, 'password': settings.admin_password}, ensure_ascii=False))} >/dev/null",
             "echo 'primary switch complete; 请将管控 DNS 指向新主'",
         ]
     )
