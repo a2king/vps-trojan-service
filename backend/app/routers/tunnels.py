@@ -51,6 +51,7 @@ def add_tunnel(body: TunnelProxyCreate, db: Session = Depends(get_db)) -> Tunnel
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     nodes = list_vps(db)
     hops = {item.id: item for item in nodes}
+    push_replicas_after_acl_commit()
     return _out(row, hops, nodes)
 
 
@@ -64,15 +65,13 @@ def patch_tunnel(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="隧道代理不存在")
     payload = body.model_dump(exclude_unset=True)
-    hop_changed = "vps_id" in payload and payload["vps_id"] is not None
     try:
         row = update_tunnel(db, row, payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    if hop_changed:
-        push_replicas_after_acl_commit()
+    push_replicas_after_acl_commit()
     nodes = list_vps(db)
     hops = {item.id: item for item in nodes}
     return _out(row, hops, nodes)

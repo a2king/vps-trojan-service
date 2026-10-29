@@ -261,7 +261,17 @@ export function NodesPage() {
                         />
                       </td>
                       <td className="num">{item.is_local ? '本机' : `${item.ssh_user}@${item.ssh_host}:${item.ssh_port}`}</td>
-                      <td>{item.is_local ? '主控' : item.hidden ? '高级' : '普通'}</td>
+                      <td>
+                        {item.is_local
+                          ? '主控'
+                          : item.replica
+                            ? item.hidden
+                              ? '完整备控（高级）'
+                              : '完整备控'
+                            : item.hidden
+                              ? '高级'
+                              : '普通'}
+                      </td>
                       <td>
                         <span className="badge">
                           <i className={`dot ${item.status === 'online' ? '' : item.status === 'error' ? 'off' : 'warn'}`} />

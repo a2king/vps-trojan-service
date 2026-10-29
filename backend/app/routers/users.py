@@ -134,6 +134,7 @@ def update_user(user_id: int, body: UserUpdate, db: Session = Depends(get_db)) -
             set_trojan_enabled(trojan, body.enabled)
     db.commit()
     db.refresh(account)
+    push_replicas_after_acl_commit()
     return _stats_for_accounts(db, [account])[0]
 
 
@@ -154,6 +155,7 @@ def reset_password(user_id: int, body: PasswordReset, db: Session = Depends(get_
         trojan.username = account.name
     db.commit()
     db.refresh(account)
+    push_replicas_after_acl_commit()
     return _stats_for_accounts(db, [account])[0]
 
 

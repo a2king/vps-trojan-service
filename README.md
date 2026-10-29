@@ -134,6 +134,8 @@ sudo systemctl start trojan-control-dns-watch.service          # 立刻试 DNS �
 
 同步落盘位置默认：备机 `/var/lib/trojan-admin/ha-incoming/`（`trojan.db` + `ssh/`）。
 
+完整备控还会接收独立冷备快照：主控在写库/配置更新后约 10 分钟防抖广播一次，并每天按 `Asia/Shanghai` 03:00 广播一次；快照落在备控 `/opt/data/trojan-backup/`，仅保留最近 14 份。快照包含在线 SQLite 备份、`backend/data/ssh/`、安装根 `.env`、可选 `ha.env` 和 `RESTORE.md`。也可手工执行 `deploy/control-cold-backup.sh --local-only` 生成本地冷备，或传 `--host` 推送到指定备控。
+
 ### 故障切换（推荐：只改 DNS）
 
 1. 在域名网站把管控域名 A 记录改成备机公网 IP（TTL 建议 60–300s）

@@ -16,6 +16,7 @@ from app.paths import repo_root
 from app.services import install_logs, ssh
 from app.services.nodes import bind_vps_to_existing_groups, normalize_domain
 from app.services.replica_sync import backup_sqlite, sync_replicas
+from app.services.cold_backup import schedule_cold_backup
 
 logger = logging.getLogger("trojan-admin")
 settings = get_settings()
@@ -265,6 +266,9 @@ def install_remote(vps_id: str, password: str | None = None) -> None:
         row.status = "online"
         row.last_error = ""
         db.commit()
+        # The replica only becomes eligible for cold broadcast after the
+        # remote install has completed and its status is online.
+        schedule_cold_backup()
         log("同步账号与配置到备机")
         try:
             sync_replicas()

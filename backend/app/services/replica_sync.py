@@ -133,10 +133,15 @@ def sync_replicas() -> None:
 
 
 def push_replicas_after_acl_commit() -> None:
-    """主库已提交后再调用。推送失败只记日志和 vps.last_error，不影响主库。"""
+    """主库已提交后再调用。热同步立即推送，冷备份走十分钟防抖。"""
     if not settings.is_control_primary:
         return
     threading.Thread(target=_sync_replicas_safe, daemon=True, name="replica-acl-push").start()
+    # Cold snapshots are intentionally debounced: one write burst produces one
+    # package, while the existing hot replica sync remains immediate.
+    from app.services.cold_backup import schedule_cold_backup
+
+    schedule_cold_backup()
 
 
 def _sync_replicas_safe() -> None:

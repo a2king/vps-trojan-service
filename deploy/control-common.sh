@@ -8,6 +8,7 @@ _HA_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ha_load_env() {
   local repo_ha
   repo_ha="$(cd "${_HA_COMMON_DIR}/.." && pwd)/deploy/ha.env"
+  HA_ENV_FILE_PATH=""
   local candidates=(
     "${HA_ENV:-}"
     /etc/trojan-admin/ha.env
@@ -19,6 +20,7 @@ ha_load_env() {
     [[ -n "$f" && -f "$f" ]] || continue
     # shellcheck disable=SC1090
     source "$f"
+    HA_ENV_FILE_PATH="$f"
     break
   done
 
@@ -32,6 +34,22 @@ ha_load_env() {
   DB_PATH="${DB_PATH:-${DATA_DIR}/trojan.db}"
   SSH_DIR="${SSH_DIR:-${DATA_DIR}/ssh}"
   DNS_RESOLVERS="${DNS_RESOLVERS:-1.1.1.1 8.8.8.8}"
+}
+
+ha_env_file_path() {
+  # ha_load_env records the exact file that was sourced.  Keep this helper
+  # useful for callers that only need to locate the file after loading env.
+  if [[ -n "${HA_ENV_FILE_PATH:-}" && -f "${HA_ENV_FILE_PATH}" ]]; then
+    printf '%s\n' "$HA_ENV_FILE_PATH"
+    return 0
+  fi
+  local candidate
+  for candidate in "${HA_ENV:-}" /etc/trojan-admin/ha.env "${_HA_COMMON_DIR}/ha.env" "$(cd "${_HA_COMMON_DIR}/.." && pwd)/deploy/ha.env"; do
+    [[ -n "$candidate" && -f "$candidate" ]] || continue
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  return 1
 }
 
 ha_env_get() {
