@@ -5,6 +5,7 @@ import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
 from app.config import get_settings
@@ -15,6 +16,7 @@ from app.routers import auth, clash, subscribe, system, tunnels, users, vps
 from app.security import hash_admin_password
 from app.services.clash import seed_clash
 from app.services.node_install import start_online_tunnels
+from app.services.control_lock import clear_switch_marker, is_switch_in_progress
 from app.services.nodes import seed_local_vps
 from app.services.replica_sync import sync_replicas
 from app.services.ips import ingest_trojan_ips
@@ -53,11 +55,16 @@ def init_db() -> None:
         db.commit()
         seed_clash(db)
         seed_local_vps(db)
+        if settings.is_control_primary:
+            clear_switch_marker()
     finally:
         db.close()
 
 
 def job_traffic() -> None:
+    if is_switch_in_progress():
+        logger.info("主节点切换进行中，跳过流量采集")
+        return
     db = SessionLocal()
     try:
         collect_traffic(db)
@@ -69,6 +76,9 @@ def job_traffic() -> None:
 
 
 def job_sync_replicas() -> None:
+    if is_switch_in_progress():
+        logger.info("主节点切换进行中，跳过备机同步")
+        return
     try:
         sync_replicas()
     except Exception:
@@ -76,6 +86,9 @@ def job_sync_replicas() -> None:
 
 
 def job_ingest_ips() -> None:
+    if is_switch_in_progress():
+        logger.info("主节点切换进行中，跳过登录 IP 采集")
+        return
     db = SessionLocal()
     try:
         ingest_trojan_ips(db)
@@ -152,6 +165,18 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Trojan Admin", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def standby_write_guard(request, call_next):
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path != "/api/auth/login":
+        if not settings.is_control_primary:
+            return JSONResponse(status_code=409, content={"detail": "当前为 standby，只读；请通过管控域名访问当前 primary"})
+        if is_switch_in_progress():
+            return JSONResponse(status_code=409, content={"detail": "主节点切换进行中，暂时禁止写入"})
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -170,4 +195,4 @@ app.include_router(subscribe.router)
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "control_role": settings.control_role}
+    return {"ok": True, "control_role": "primary" if settings.is_control_primary else "standby"}

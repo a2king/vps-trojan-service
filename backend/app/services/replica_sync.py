@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.models import Vps
 from app.services import ssh
+from app.services.control_lock import is_switch_in_progress
 
 logger = logging.getLogger("trojan-admin")
 settings = get_settings()
@@ -52,7 +53,7 @@ try:
     src.backup(dst)
     dst.execute("UPDATE vps SET is_local=0")
     dst.execute(
-        "UPDATE vps SET is_local=1, ssh_host='127.0.0.1', status='online' WHERE id=?",
+        "UPDATE vps SET is_local=1, replica=0, ssh_host='127.0.0.1', status='online' WHERE id=?",
         (domain,),
     )
     dst.commit()
@@ -103,7 +104,7 @@ def _record_sync_error(db: Session, vps_id: str, message: str) -> None:
 
 
 def sync_replicas() -> None:
-    if not settings.is_control_primary:
+    if not settings.is_control_primary or is_switch_in_progress():
         return
     with _sync_lock:
         db = SessionLocal()

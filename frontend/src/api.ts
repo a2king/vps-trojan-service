@@ -118,6 +118,7 @@ export type VpsNode = {
   ssh_port: number
   ssh_user: string
   is_local: boolean
+  replica: boolean
   hidden: boolean
   status: string
   last_error: string
@@ -128,6 +129,12 @@ export type VpsLog = {
   id: string
   status: string
   log: string
+}
+
+export type VpsPromotePrimaryResult = {
+  target: string
+  status: string
+  message: string
 }
 
 export type TunnelProxy = {
@@ -232,6 +239,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ssh_password: sshPassword || '' }),
     }),
+  promotePrimary: (id: string) =>
+    request<VpsPromotePrimaryResult>(`/api/vps/${encodeURIComponent(id)}/promote-primary`, { method: 'POST' }),
   saveUserNodes: (id: number, groups: { group_name: string; vps_ids: string[] }[]) =>
     request<User>(`/api/users/${id}/nodes`, { method: 'PUT', body: JSON.stringify({ groups }) }),
   users: () => request<User[]>('/api/users'),

@@ -303,6 +303,7 @@ def to_vps_out(row: Vps) -> dict:
         "ssh_port": int(row.ssh_port or 22),
         "ssh_user": row.ssh_user or "root",
         "is_local": bool(row.is_local),
+        "replica": bool(row.replica),
         "hidden": bool(row.hidden),
         "status": row.status or "pending",
         "last_error": row.last_error or "",

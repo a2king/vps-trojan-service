@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_admin
 from app.models import Admin, Vps
-from app.schemas import VpsCreate, VpsLogOut, VpsOut, VpsRedeploy, VpsUpdate
+from app.schemas import VpsCreate, VpsLogOut, VpsOut, VpsPromotePrimaryOut, VpsRedeploy, VpsUpdate
 from app.services import install_logs, node_install, ssh
+from app.services.control_lock import is_switch_in_progress
+from app.services.primary_switch import promote_primary
 from app.services.nodes import (
     bind_vps_to_existing_groups,
     get_vps,
@@ -131,3 +133,19 @@ def redeploy_node(vps_id: str, body: VpsRedeploy | None = None, db: Session = De
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _out(row)
+
+
+@router.post("/{vps_id}/promote-primary", response_model=VpsPromotePrimaryOut, status_code=status.HTTP_202_ACCEPTED)
+def promote_node(vps_id: str, db: Session = Depends(get_db)) -> VpsPromotePrimaryOut:
+    if is_switch_in_progress():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有主节点切换正在进行")
+    row = get_vps(db, vps_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="节点不存在")
+    try:
+        result = promote_primary(row)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"主节点切换失败：{exc}") from exc
+    return VpsPromotePrimaryOut(**result)
