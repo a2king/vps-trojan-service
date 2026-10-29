@@ -85,6 +85,7 @@ def update_node(vps_id: str, body: VpsUpdate, db: Session = Depends(get_db)) -> 
         row.hidden = 1 if body.hidden else 0
     db.commit()
     db.refresh(row)
+    push_replicas_after_acl_commit()
     return _out(row)
 
 
@@ -132,6 +133,7 @@ def redeploy_node(vps_id: str, body: VpsRedeploy | None = None, db: Session = De
         node_install.start_install_job(row.id, password)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    push_replicas_after_acl_commit()
     return _out(row)
 
 

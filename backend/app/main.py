@@ -16,6 +16,7 @@ from app.routers import auth, clash, subscribe, system, tunnels, users, vps
 from app.security import hash_admin_password
 from app.services.clash import seed_clash
 from app.services.node_install import start_online_tunnels
+from app.services.cold_backup import job_cold_backup
 from app.services.control_lock import clear_switch_marker, is_switch_in_progress
 from app.services.nodes import seed_local_vps
 from app.services.replica_sync import sync_replicas
@@ -85,6 +86,16 @@ def job_sync_replicas() -> None:
         logger.exception("备机数据同步失败")
 
 
+def job_cold_backup_daily() -> None:
+    if is_switch_in_progress():
+        logger.info("主节点切换进行中，跳过每日冷备份")
+        return
+    try:
+        job_cold_backup()
+    except Exception:
+        logger.exception("每日冷备份广播失败")
+
+
 def job_ingest_ips() -> None:
     if is_switch_in_progress():
         logger.info("主节点切换进行中，跳过登录 IP 采集")
@@ -150,6 +161,14 @@ async def lifespan(_: FastAPI):
             "interval",
             seconds=max(300, settings.replica_sync_interval_seconds),
             id="replica-sync",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            job_cold_backup_daily,
+            "cron",
+            hour=3,
+            minute=0,
+            id="cold-backup-daily",
             replace_existing=True,
         )
         scheduler.start()
