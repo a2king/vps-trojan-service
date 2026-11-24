@@ -28,7 +28,12 @@ latest="${HA_BACKUP_DIR}/latest"
 
 ssh_opts=(-p "${STANDBY_PORT}" -o BatchMode=yes -o IdentitiesOnly=yes)
 # shellcheck disable=SC2206
-ssh_opts+=(${RSYNC_RSH_EXTRA:--o StrictHostKeyChecking=accept-new})
+ssh_opts+=(${RSYNC_RSH_EXTRA:-})
+if [[ -n "${STANDBY_KNOWN_HOSTS:-}" ]]; then
+  ssh_opts+=(-o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${STANDBY_KNOWN_HOSTS}")
+else
+  ssh_opts+=(-o StrictHostKeyChecking=accept-new)
+fi
 key="${STANDBY_SSH_KEY:-}"
 if [[ -z "$key" && -f "${SSH_DIR}/id_ed25519" ]]; then
   key="${SSH_DIR}/id_ed25519"

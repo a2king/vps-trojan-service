@@ -4,6 +4,7 @@ import io
 import logging
 import secrets
 import tarfile
+import tempfile
 import threading
 from pathlib import Path
 
@@ -69,7 +70,7 @@ def _standby_env(domain: str) -> str:
         [
             f"ADMIN_USERNAME={settings.admin_username}",
             f"ADMIN_PASSWORD={settings.admin_password}",
-            f"JWT_SECRET={settings.jwt_secret}",
+            f"JWT_SECRET={secrets.token_hex(32)}",
             f"JWT_EXPIRE_HOURS={settings.jwt_expire_hours}",
             f"DOMAIN={domain}",
             "TROJAN_PORT=443",
@@ -115,7 +116,8 @@ def try_start_autossh(vps: Vps) -> bool:
                     f"SSH_HOST={vps.ssh_host}",
                     f"SSH_PORT={int(vps.ssh_port or 22)}",
                     f"SSH_USER={vps.ssh_user or 'root'}",
-                    f"SSH_KEY={ssh.private_key_path()}",
+                    f"SSH_KEY={ssh.node_private_key_path(vps.id)}",
+                    f"SSH_KNOWN_HOSTS={ssh.known_hosts_path()}",
                     f"LOCAL_HOST={settings.trojan_mysql_host}",
                     f"LOCAL_PORT={settings.trojan_mysql_port}",
                     f"REMOTE_PORT={settings.trojan_mysql_port}",
@@ -128,12 +130,15 @@ def try_start_autossh(vps: Vps) -> bool:
         name = f"trojan-tunnel@{instance}"
         subprocess.run(["systemctl", "daemon-reload"], check=False, capture_output=True, timeout=15)
         result = subprocess.run(
-            ["systemctl", "enable", "--now", name],
+            ["systemctl", "enable", name],
             check=False,
             capture_output=True,
             text=True,
             timeout=20,
         )
+        if result.returncode != 0:
+            return False
+        result = subprocess.run(["systemctl", "restart", name], check=False, capture_output=True, timeout=20)
         return result.returncode == 0
     except Exception:
         logger.exception("autossh 隧道启动失败，将改用进程内隧道")
@@ -158,6 +163,7 @@ def ensure_tunnel(vps: Vps) -> None:
         return
     if not settings.is_control_primary:
         raise RuntimeError(f"CONTROL_ROLE={settings.control_role}，备控不能建立反向隧道")
+    ssh.connect_node(vps).close()
     if try_start_autossh(vps):
         ssh.stop_tunnel(vps.id)
         return
@@ -211,30 +217,24 @@ def install_remote(vps_id: str, password: str | None = None) -> None:
         stop_tunnel(vps_id)
 
         log(f"连接 {row.ssh_user}@{row.ssh_host}:{row.ssh_port}")
-        if password:
-            client = ssh.connect(row.ssh_host, int(row.ssh_port or 22), row.ssh_user or "root", password=password)
-            try:
-                _, pub = ssh.ensure_host_key()
-                log("写入免密公钥")
-                ssh.install_authorized_key(client, pub)
-            finally:
-                client.close()
-            log("改用密钥登录")
-        else:
-            log("使用已有密钥登录")
-        client = ssh.connect(row.ssh_host, int(row.ssh_port or 22), row.ssh_user or "root")
+        client = ssh.connect_node(row, password=password)
         try:
             log("准备本机认证库快照")
-            snapshot = settings.sqlite_path.parent / "replica-snapshot.db"
-            backup_sqlite(snapshot)
+            with tempfile.TemporaryDirectory(prefix="trojan-node-install-") as directory:
+                snapshot = Path(directory) / "trojan.db"
+                backup_sqlite(snapshot)
+                payload = _pack_payload(snapshot)
             log("上传安装包（代理 + 管理后台）")
-            payload = _pack_payload(snapshot)
-            ssh.run(client, f"mkdir -p {REMOTE_ROOT} /tmp")
-            ssh.sftp_put_bytes(client, payload, "/tmp/vps-trojan-node.tgz")
-            ssh.sftp_put_bytes(client, _standby_env(row.id).encode("utf-8"), f"{REMOTE_ROOT}/.env")
+            stage = f"{REMOTE_ROOT}/.install-stage"
+            ssh.run(client, f"install -d -m 700 {stage}")
+            ssh.sftp_put_bytes(client, payload, f"{stage}/payload.tgz")
+            ssh.sftp_put_bytes(client, _standby_env(row.id).encode("utf-8"), f"{stage}/standby.env")
             code = ssh.run_logged(
                 client,
-                f"tar -xzf /tmp/vps-trojan-node.tgz -C {REMOTE_ROOT} && chmod +x {REMOTE_ROOT}/install-node.sh",
+                f"tar -xzf {stage}/payload.tgz -C {REMOTE_ROOT}"
+                f" && install -m 600 {stage}/standby.env {REMOTE_ROOT}/.env"
+                f" && chmod +x {REMOTE_ROOT}/install-node.sh"
+                f" && rm -f {stage}/payload.tgz {stage}/standby.env",
                 log,
                 timeout=120,
             )

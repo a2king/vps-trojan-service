@@ -103,7 +103,7 @@ npm run dev
 约束：
 
 - 同一时刻只有一台 `CONTROL_ROLE=primary`（会拉子节点反向隧道）
-- 备控 `CONTROL_ROLE=standby`：不拉隧道、不跑流量/IP 采集
+- 备控 `CONTROL_ROLE=standby` 负责记录本机流量，由主控定时拉取流量和认证日志。
 - 最多丢失一个同步周期内的写入（默认每 6 小时）
 - 主备 `.env` 里的 `DOMAIN` 建议与管控/订阅域名一致
 - DNS 切换后最多约 5 分钟（再加解析 TTL）才会角色对齐
@@ -111,7 +111,7 @@ npm run dev
 ### 一次性配置
 
 1. 备机同样执行 `install.sh`，装完后把 `.env` 改为 `CONTROL_ROLE=standby`，并 `systemctl restart trojan-admin`（或先停掉，只留同步目录待命）
-2. 保证主控能 SSH 到备机（可用主控 `backend/data/ssh` 密钥）
+2. 保证主控能 SSH 到备机。后台为每个节点登记独立公钥，主机指纹会在首次连接时留存。手工同步可以在 `ha.env` 中配置 `STANDBY_SSH_KEY` 和 `STANDBY_KNOWN_HOSTS`。
 3. **主备都配置** `/etc/trojan-admin/ha.env`：至少填 `CONTROL_LOCAL_IP=本机公网IP`；主控再填 `STANDBY_HOST`
 4. 主控启用同步 timer；**主备都启用** DNS 监听 timer：
 
@@ -132,11 +132,13 @@ sudo systemctl start trojan-control-sync.service               # 立刻试同步
 sudo systemctl start trojan-control-dns-watch.service          # 立刻试 DNS 对齐
 ```
 
-同步落盘位置默认：备机 `/var/lib/trojan-admin/ha-incoming/`（`trojan.db` + `ssh/`）。
+同步快照默认落在备机的 `/var/lib/trojan-admin/ha-incoming/trojan.db`。管理 SSH 私钥留在持有方的本机目录。
 
-完整备控还会接收独立冷备快照：主控在写库/配置更新后约 10 分钟防抖广播一次，并每天按 `Asia/Shanghai` 03:00 广播一次；快照落在备控 `/opt/data/trojan-backup/`，仅保留最近 14 份。快照包含在线 SQLite 备份、`backend/data/ssh/`、安装根 `.env`、可选 `ha.env` 和 `RESTORE.md`。也可手工执行 `deploy/control-cold-backup.sh --local-only` 生成本地冷备，或传 `--host` 推送到指定备控。
+完整备控接收独立冷备快照。主控在写库或配置停止变更约 10 分钟后广播一次，每天北京时间 03:00 再广播一次。备控的 `/opt/data/trojan-backup/` 保留最近 14 份，包含 SQLite 备份、安装根 `.env`、可选 `ha.env` 和恢复说明。恢复管理访问时重新登记节点公钥，或从独立保管的凭据恢复。可以执行 `deploy/control-cold-backup.sh --local-only` 生成本地冷备，或传 `--host` 推送到指定备控。
 
 ### 故障切换（推荐：只改 DNS）
+
+计划使用 DNS 接管时，先在节点页给目标备机执行「准备接管密钥」，让它在本机生成密钥并把公钥登记到其他节点。「设为主节点」会在切换前执行同样的准备。SSH 地址或节点清单变更后可再次执行准备。
 
 1. 在域名网站把管控域名 A 记录改成备机公网 IP（TTL 建议 60–300s）
 2. 等待最多约 5 分钟：备机发现解析指向自己 → 自动 `promote`；旧主发现解析已离开 → 自动 `demote`
@@ -149,6 +151,13 @@ sudo systemctl start trojan-control-dns-watch.service          # 立刻试 DNS �
 把域名 A 记录改回原主控 IP 即可，双方 DNS watch 会自动交换角色。若原主长时间离线，先确认它已收到较新 sync（或接受数据回退），再改 DNS。
 
 相关脚本：`control-backup.sh`、`control-sync.sh`、`control-promote.sh`、`control-dns-watch.sh`、`ha.env.example`。
+
+## 升级采集与节点观测
+
+1. 先升级主控，再在节点页重新部署各完整备机。旧节点升级前，节点页可能提示新采集接口不可用。
+2. 各节点在本机 `backend/data/node-traffic.db` 按天累计流量。主控定期拉取已计数数据，重复拉取同一天的累计值只入账一次。已有流量汇总继续计入全网总量，节点筛选从启用独立采集开始。
+3. 节点页展示最近成功读取流量、认证日志和应用权限的时间。日志可在安装、Trojan 和管理后台之间切换，管理审计记录账号、规则、节点和隧道的写操作。
+4. 已有 SSH 授权通过旧凭据升级。成功验证专用密钥后，后台移除目标上的旧共用授权。首次连接需核对远端主机身份，重装导致主机指纹变更时先核对再更新本机 `known_hosts`。重新部署完整备机时会轮换该节点的管理会话签名密钥，已有会话需要重新登录。
 
 ## 目录
 

@@ -55,7 +55,7 @@ def _ha_env_path(root: Path) -> Path | None:
 def _restore_guide() -> str:
     return """# Trojan 控制面冷备份恢复步骤
 
-本包由主控生成，包含一致性的 `trojan.db`、管理 SSH 密钥、安装根 `.env`、可选 `ha.env`。
+本包由主控生成，包含一致性的 `trojan.db`、安装根 `.env`、可选 `ha.env`。
 账号、规则、隧道和节点配置都在 SQLite 数据库中，无需额外导入。
 
 ## 从零恢复
@@ -72,11 +72,7 @@ def _restore_guide() -> str:
      /opt/vps-trojan-service/backend/data/trojan.db
    sudo rm -f /opt/vps-trojan-service/trojan.db
    ```
-4. 确认密钥目录权限：
-   ```bash
-   sudo chmod 700 /opt/vps-trojan-service/backend/data/ssh
-   sudo chmod 600 /opt/vps-trojan-service/backend/data/ssh/id_ed25519 2>/dev/null || true
-   ```
+4. 使用独立保管的节点管理凭据，或重新登记节点 SSH 公钥。
 5. 确认安装根 `.env` 中的 `DOMAIN`、`CONTROL_ROLE` 和路径配置；首次接管时设为 `CONTROL_ROLE=primary`，仅待命时设为 `standby`。
 6. 若包内有 `ha.env`，复制到 `/etc/trojan-admin/ha.env` 并设为 600：
    ```bash
@@ -101,7 +97,6 @@ def build_archive() -> tuple[str, bytes]:
     source_db = settings.sqlite_path
     if not source_db.is_file():
         raise RuntimeError(f"冷备份缺少 SQLite 数据库：{source_db}")
-    ssh_dir = source_db.parent / "ssh"
     ha_env = _ha_env_path(root)
     stamp = now_local().strftime("%Y%m%d-%H%M%S")
 
@@ -111,15 +106,6 @@ def build_archive() -> tuple[str, bytes]:
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
             archive.add(snapshot, arcname="trojan.db", recursive=False)
-            # Keep the directory itself in the archive even when a fresh install
-            # has no generated key yet.
-            if ssh_dir.is_dir():
-                archive.add(ssh_dir, arcname="backend/data/ssh", recursive=True)
-            else:
-                info = tarfile.TarInfo("backend/data/ssh")
-                info.type = tarfile.DIRTYPE
-                info.mode = 0o700
-                archive.addfile(info)
             archive.add(env_file, arcname=".env", recursive=False)
             if ha_env is not None:
                 archive.add(ha_env, arcname="ha.env", recursive=False)
@@ -191,7 +177,7 @@ def broadcast_cold_backup() -> None:
         for row in rows:
             client = None
             try:
-                client = ssh.connect(row.ssh_host, int(row.ssh_port or 22), row.ssh_user or "root")
+                client = ssh.connect_node(row)
                 ssh.run(client, _remote_prepare_command(), timeout=60)
                 ssh.sftp_put_bytes(client, payload, remote_name)
                 ssh.run(client, f"chmod 600 {remote_name}", timeout=30)

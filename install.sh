@@ -494,7 +494,7 @@ link_frontend() {
 setup_log_retention() {
   green "配置日志最多保留 30 天…"
   touch /var/log/trojan.log /var/log/trojan-admin.log
-  chmod 644 /var/log/trojan.log /var/log/trojan-admin.log
+  chmod 640 /var/log/trojan.log /var/log/trojan-admin.log
   install -m 644 "${INSTALL_DIR}/deploy/logrotate.conf" /etc/logrotate.d/vps-trojan
   mkdir -p /etc/systemd/journald.conf.d
   install -m 644 "${INSTALL_DIR}/deploy/journald-retention.conf" /etc/systemd/journald.conf.d/vps-trojan.conf

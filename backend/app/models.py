@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from uuid import uuid4
 
 from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -39,6 +40,67 @@ class Account(Base):
     remark: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    telemetry_key: Mapped[str] = mapped_column(String(32), nullable=False, default=lambda: uuid4().hex)
+
+
+class NodeTrafficDaily(Base):
+    __tablename__ = "node_traffic_daily"
+
+    node_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    account_key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    stat_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    download_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    upload_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class NodeTrafficMonthly(Base):
+    __tablename__ = "node_traffic_monthly"
+
+    node_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    account_key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    month: Mapped[date] = mapped_column(Date, primary_key=True)
+    download_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    upload_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class NodeObservation(Base):
+    __tablename__ = "node_observations"
+
+    node_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    traffic_at: Mapped[datetime | None] = mapped_column(DateTime)
+    traffic_error: Mapped[str | None] = mapped_column(Text)
+    ips_at: Mapped[datetime | None] = mapped_column(DateTime)
+    ips_error: Mapped[str | None] = mapped_column(Text)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime)
+    applied_version: Mapped[str | None] = mapped_column(String(64))
+    sync_error: Mapped[str | None] = mapped_column(Text)
+
+
+class AccountNodeIp(Base):
+    __tablename__ = "account_node_ips"
+
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    ip: Mapped[str] = mapped_column(String(64), primary_key=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class AccountAuthPrefix(Base):
+    __tablename__ = "account_auth_prefixes"
+
+    prefix: Mapped[str] = mapped_column(String(7), primary_key=True)
+    account_key: Mapped[str] = mapped_column(String(32), primary_key=True)
+
+
+class AdminAuditEvent(Base):
+    __tablename__ = "admin_audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    actor: Mapped[str] = mapped_column(String(64))
+    event: Mapped[str] = mapped_column(Text)
 
 
 class TrafficDaily(Base):
@@ -92,6 +154,7 @@ class LogCursor(Base):
     name: Mapped[str] = mapped_column(String(128), primary_key=True)
     inode: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     offset: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    anchor: Mapped[str] = mapped_column(String(16), nullable=False, default="")
 
 
 class Vps(Base):

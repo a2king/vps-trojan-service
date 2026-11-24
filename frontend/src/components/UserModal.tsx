@@ -73,6 +73,8 @@ type Props = {
 export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props) {
   const [current, setCurrent] = useState(user)
   const [granularity, setGranularity] = useState<'day' | 'month'>('day')
+  const [trafficNode, setTrafficNode] = useState('')
+  const [trafficError, setTrafficError] = useState('')
   const [points, setPoints] = useState<TrafficPoint[]>([])
   const [ips, setIps] = useState<UserIp[]>([])
   const [ipError, setIpError] = useState('')
@@ -102,13 +104,21 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
 
   useEffect(() => {
     let cancelled = false
-    api.traffic(current.id, granularity).then((data) => {
-      if (!cancelled) setPoints(data)
-    })
+    setTrafficError('')
+    api.traffic(current.id, granularity, trafficNode)
+      .then((data) => {
+        if (!cancelled) setPoints(data)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setPoints([])
+          setTrafficError(err instanceof Error ? err.message : '读取流量统计失败')
+        }
+      })
     return () => {
       cancelled = true
     }
-  }, [current.id, granularity])
+  }, [current.id, granularity, trafficNode])
 
   useEffect(() => {
     let cancelled = false
@@ -226,6 +236,10 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                 </span>
                 <em>最近使用</em>
                 <span>{formatLastSeen(current.last_seen_at)}</span>
+                <em>最近认证</em>
+                <span>{formatLastSeen(current.last_auth_at)}</span>
+                <em>最近有流量</em>
+                <span>{formatLastSeen(current.last_traffic_at)}</span>
                 <em>创建时间</em>
                 <span>{formatDateTime(current.created_at)}</span>
                 <em>累计流量</em>
@@ -311,7 +325,12 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
               <button className={`tab ${granularity === 'month' ? 'on' : ''}`} type="button" onClick={() => setGranularity('month')}>
                 按月
               </button>
+              <select aria-label="流量入口节点" value={trafficNode} onChange={(event) => setTrafficNode(event.target.value)}>
+                <option value="">全部节点</option>
+                {nodes.map((node) => <option key={node.id} value={node.id}>{node.name || node.id}</option>)}
+              </select>
             </div>
+            {trafficError ? <p className="error">{trafficError}</p> : null}
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData} barGap={2}>
                 <CartesianGrid stroke="rgba(0,0,0,0.06)" vertical={false} />
@@ -331,7 +350,7 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
               </BarChart>
             </ResponsiveContainer>
             <p className="num" style={{ color: 'var(--admin-muted)', marginTop: 12 }}>
-              今日 {formatPair(current.today_download, current.today_upload)}　本月{' '}
+              全网今日 {formatPair(current.today_download, current.today_upload)}　全网本月{' '}
               {formatPair(current.month_download, current.month_upload)}
             </p>
             <div className="ip-block">
@@ -346,13 +365,17 @@ export function UserModal({ user, onClose, onChanged, onDeleted, toast }: Props)
                     <thead>
                       <tr>
                         <th>IP</th>
-                        <th>最近访问</th>
+                        <th>入口节点</th>
+                        <th>首次认证</th>
+                        <th>最近认证</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ips.map((item) => (
-                        <tr key={item.ip}>
+                        <tr key={`${item.node_id ?? 'legacy'}:${item.ip}`}>
                           <td className="num">{item.ip}</td>
+                          <td>{item.node_id ?? '历史记录'}</td>
+                          <td>{item.first_seen_at ? formatDateTime(item.first_seen_at) : '—'}</td>
                           <td>{formatDateTime(item.last_seen_at)}</td>
                         </tr>
                       ))}

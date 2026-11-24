@@ -34,6 +34,8 @@ def to_user_out(
     month_download: int = 0,
     month_upload: int = 0,
     db: Session | None = None,
+    telemetry: tuple = (0, 0, None),
+    auth_at=None,
 ) -> UserOut:
     total_down = int(trojan.download) if trojan else 0
     total_up = int(trojan.upload) if trojan else 0
@@ -56,9 +58,11 @@ def to_user_out(
         enabled=bool(account.enabled),
         remark=account.remark or "",
         created_at=to_iso(account.created_at) or created.isoformat(),
-        last_seen_at=to_iso(account.last_seen_at),
-        total_download=total_down,
-        total_upload=total_up,
+        last_seen_at=to_iso(max((value for value in (account.last_seen_at, telemetry[2], auth_at) if value is not None), default=None)),
+        last_auth_at=to_iso(auth_at),
+        last_traffic_at=to_iso(telemetry[2]),
+        total_download=total_down + telemetry[0],
+        total_upload=total_up + telemetry[1],
         today_download=today_download,
         today_upload=today_upload,
         month_download=month_download,

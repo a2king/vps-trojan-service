@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import logging
 import select
 import socket
@@ -12,18 +13,21 @@ from typing import Callable
 import paramiko
 from paramiko.rsakey import RSAKey
 from paramiko.ed25519key import Ed25519Key
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
 
 from app.config import get_settings
 
 logger = logging.getLogger("trojan-admin")
 settings = get_settings()
+_key_lock = threading.RLock()
 
 OnLine = Callable[[str], None]
 
 
 def ssh_dir() -> Path:
     path = settings.sqlite_path.parent / "ssh"
-    path.mkdir(parents=True, exist_ok=True)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return path
 
 
@@ -59,16 +63,99 @@ def _load_private_key() -> paramiko.PKey:
         return RSAKey.from_private_key_file(path)
 
 
+def _node_paths(node_id: str) -> tuple[Path, Path]:
+    directory = ssh_dir() / "nodes"
+    directory.mkdir(mode=0o700, exist_ok=True)
+    path = directory / hashlib.sha256(node_id.encode()).hexdigest()
+    return path, path.with_suffix(".enrolled")
+
+
+def node_private_key_path(node_id: str) -> Path:
+    return _node_paths(node_id)[0]
+
+
+def known_hosts_path() -> Path:
+    return ssh_dir() / "known_hosts"
+
+
+class RememberHostKey(paramiko.MissingHostKeyPolicy):
+    def missing_host_key(self, client, hostname, key) -> None:
+        with _key_lock:
+            known = paramiko.HostKeys()
+            path = known_hosts_path()
+            if path.exists():
+                known.load(str(path))
+            stored = known.lookup(hostname)
+            if stored and stored.get(key.get_name()) != key:
+                raise paramiko.SSHException(f"SSH 主机密钥已变更：{hostname}")
+            known.add(hostname, key.get_name(), key)
+            known.save(str(path))
+            path.chmod(0o600)
+
+
+def connect_node(vps, *, password: str | None = None, timeout: int = 20) -> paramiko.SSHClient:
+    path, enrolled = _node_paths(vps.id)
+    host, port, user = vps.ssh_host, int(vps.ssh_port or 22), vps.ssh_user or "root"
+    with _key_lock:
+        if not path.exists():
+            generated = Ed25519PrivateKey.generate()
+            data = generated.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption())
+            path.write_bytes(data)
+            path.chmod(0o600)
+    key = Ed25519Key.from_private_key_file(str(path))
+    if enrolled.exists() and not password:
+        return connect(host, port, user, key=key, timeout=timeout)
+    try:
+        client = connect(host, port, user, key=key, timeout=timeout)
+    except paramiko.AuthenticationException:
+        bootstrap = connect(host, port, user, password=password, timeout=timeout)
+        try:
+            install_authorized_key(bootstrap, f"{key.get_name()} {key.get_base64()} trojan-admin-{vps.id}")
+        finally:
+            bootstrap.close()
+        client = connect(host, port, user, key=key, timeout=timeout)
+    try:
+        if public_key_path().is_file():
+            revoke_authorized_key(client, public_key_path().read_text(encoding="utf-8"))
+        enrolled.touch(mode=0o600)
+    except Exception:
+        client.close()
+        raise
+    return client
+
+
+def revoke_authorized_key(client: paramiko.SSHClient, public_key: str) -> None:
+    key_parts = public_key.split()[:2]
+    if len(key_parts) != 2:
+        return
+    run(client, (
+        "python3 - <<'PY'\n"
+        "from pathlib import Path\n"
+        f"key = {key_parts!r}\n"
+        "path = Path.home() / '.ssh' / 'authorized_keys'\n"
+        "if path.exists():\n"
+        "    lines = path.read_text(encoding='utf-8').splitlines()\n"
+        "    remaining = [line for line in lines if line.split()[:2] != key]\n"
+        "    if remaining != lines:\n"
+        "        path.write_text('\\n'.join(remaining) + '\\n', encoding='utf-8')\n"
+        "PY"
+    ))
+
+
 def connect(
     host: str,
     port: int,
     username: str,
     *,
     password: str | None = None,
+    key: paramiko.PKey | None = None,
     timeout: int = 20,
 ) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    known_hosts = known_hosts_path()
+    if known_hosts.exists():
+        client.load_host_keys(str(known_hosts))
+    client.set_missing_host_key_policy(RememberHostKey())
     kwargs: dict = {
         "hostname": host,
         "port": int(port or 22),
@@ -80,8 +167,12 @@ def connect(
     if password:
         kwargs["password"] = password
     else:
-        kwargs["pkey"] = _load_private_key()
-    client.connect(**kwargs)
+        kwargs["pkey"] = key or _load_private_key()
+    try:
+        client.connect(**kwargs)
+    except Exception:
+        client.close()
+        raise
     return client
 
 
@@ -113,6 +204,21 @@ def install_authorized_key(client: paramiko.SSHClient, public_key: str) -> None:
             "mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && "
             f"grep -Fqx '{quoted}' ~/.ssh/authorized_keys || printf '%s\\n' '{quoted}' >> ~/.ssh/authorized_keys",
         )
+
+
+def authorize_local(public_key: str) -> None:
+    directory = Path.home() / ".ssh"
+    directory.mkdir(mode=0o700, exist_ok=True)
+    path = directory / "authorized_keys"
+    with _key_lock:
+        lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+        key = public_key.strip()
+        if key not in lines:
+            with path.open("a", encoding="utf-8") as handle:
+                if lines:
+                    handle.write("\n")
+                handle.write(key + "\n")
+        path.chmod(0o600)
 
 
 def run(client: paramiko.SSHClient, command: str, timeout: int = 60) -> str:
@@ -243,8 +349,9 @@ def sftp_put_bytes(client: paramiko.SSHClient, data: bytes, remote_path: str) ->
 
 
 class ReverseTunnel(threading.Thread):
-    def __init__(self, host: str, port: int, username: str, remote_port: int, local_host: str, local_port: int) -> None:
+    def __init__(self, node_id: str, host: str, port: int, username: str, remote_port: int, local_host: str, local_port: int) -> None:
         super().__init__(daemon=True, name=f"tunnel-{host}:{remote_port}")
+        self.node_id = node_id
         self.host = host
         self.port = port
         self.username = username
@@ -276,7 +383,8 @@ class ReverseTunnel(threading.Thread):
             delay = min(delay * 2, 60)
 
     def _loop(self) -> None:
-        client = connect(self.host, self.port, self.username, timeout=20)
+        key = Ed25519Key.from_private_key_file(str(node_private_key_path(self.node_id)))
+        client = connect(self.host, self.port, self.username, key=key, timeout=20)
         self.client = client
         try:
             prepare_reverse_forward(client, self.remote_port)
@@ -349,6 +457,7 @@ _tunnel_lock = threading.Lock()
 def start_tunnel(vps_id: str, host: str, port: int, username: str) -> None:
     stop_tunnel(vps_id)
     tunnel = ReverseTunnel(
+        node_id=vps_id,
         host=host,
         port=port,
         username=username,

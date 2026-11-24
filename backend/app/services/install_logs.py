@@ -4,6 +4,7 @@ import threading
 from pathlib import Path
 
 from app.config import get_settings
+from app.services.runtime_logs import tail_log
 from app.timeutil import now_local
 
 settings = get_settings()
@@ -43,6 +44,6 @@ def append_log(vps_id: str, line: str) -> None:
 def read_log(vps_id: str) -> str:
     path = log_file(vps_id)
     if path.is_file():
-        return path.read_text(encoding="utf-8", errors="replace")
+        return "\n".join(tail_log(path, 500))
     with _lock:
         return "\n".join(_logs.get(vps_id) or [])

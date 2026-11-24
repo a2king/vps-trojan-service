@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import shlex
 import sqlite3
 import threading
+from contextlib import closing
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -14,12 +16,13 @@ from app.database import SessionLocal
 from app.models import Vps
 from app.services import ssh
 from app.services.control_lock import is_switch_in_progress
+from app.services.observation import acl_version, update_status
+from app.timeutil import now_local
 
 logger = logging.getLogger("trojan-admin")
 settings = get_settings()
 _sync_lock = threading.Lock()
 
-REMOTE_ROOT = "/opt/vps-trojan-node"
 INCOMING = "/var/lib/trojan-admin/ha-incoming/trojan.db"
 
 
@@ -39,18 +42,27 @@ def backup_sqlite(dest: Path) -> None:
 
 def _apply_script() -> str:
     return """python3 - <<'PY'
-import os, sqlite3
+import json, os, sqlite3, subprocess
 from pathlib import Path
+from urllib.request import urlopen
 domain = os.environ["REPLICA_DOMAIN"]
 incoming = Path("/var/lib/trojan-admin/ha-incoming/trojan.db")
-live = Path("/opt/vps-trojan-node/backend/data/trojan.db")
-live.parent.mkdir(parents=True, exist_ok=True)
-if not incoming.is_file():
-    raise SystemExit("缺少同步快照")
+backend = Path(subprocess.check_output(
+    ["systemctl", "show", "-p", "WorkingDirectory", "--value", "trojan-admin"], text=True,
+).strip())
+live = backend / "data" / "trojan.db"
+if not backend.is_absolute() or not live.is_file() or not incoming.is_file():
+    raise SystemExit("找不到备机数据库或同步快照")
+with urlopen("http://127.0.0.1:8000/api/health", timeout=5) as response:
+    if json.load(response).get("control_role") != "standby":
+        raise SystemExit("节点当前角色不是 standby")
 src = sqlite3.connect(incoming)
 dst = sqlite3.connect(live, timeout=30)
 try:
+    if src.execute("PRAGMA quick_check").fetchone() != ("ok",):
+        raise SystemExit("同步快照完整性校验失败")
     src.backup(dst)
+    dst.execute("UPDATE vps SET ssh_host=id, replica=1 WHERE is_local=1 AND ssh_host IN ('127.0.0.1', 'localhost', '')")
     dst.execute("UPDATE vps SET is_local=0")
     dst.execute(
         "UPDATE vps SET is_local=1, replica=0, ssh_host='127.0.0.1', status='online' WHERE id=?",
@@ -67,24 +79,14 @@ PY
 
 
 def push_replica(vps: Vps, snapshot: Path) -> None:
-    client = ssh.connect(vps.ssh_host, int(vps.ssh_port or 22), vps.ssh_user or "root")
+    client = ssh.connect_node(vps)
     try:
-        ssh.run(client, "mkdir -p /var/lib/trojan-admin/ha-incoming")
-        ssh.sftp_put_bytes(client, snapshot.read_bytes(), INCOMING)
-        key = ssh.private_key_path()
-        pub = ssh.public_key_path()
-        if key.is_file():
-            remote_ssh = f"{REMOTE_ROOT}/backend/data/ssh"
-            ssh.run(client, f"mkdir -p {remote_ssh} && chmod 700 {remote_ssh}")
-            ssh.sftp_put_bytes(client, key.read_bytes(), f"{remote_ssh}/id_ed25519")
-            ssh.run(client, f"chmod 600 {remote_ssh}/id_ed25519")
-        if pub.is_file():
-            remote_ssh = f"{REMOTE_ROOT}/backend/data/ssh"
-            ssh.run(client, f"mkdir -p {remote_ssh}")
-            ssh.sftp_put_bytes(client, pub.read_bytes(), f"{remote_ssh}/id_ed25519.pub")
+        ssh.run(client, "install -d -m 700 /var/lib/trojan-admin/ha-incoming")
+        ssh.sftp_put_bytes(client, snapshot.read_bytes(), f"{INCOMING}.pending")
+        ssh.run(client, f"chmod 600 {INCOMING}.pending && mv -f {INCOMING}.pending {INCOMING}")
         ssh.run(
             client,
-            f"REPLICA_DOMAIN={vps.id} {_apply_script()}",
+            f"REPLICA_DOMAIN={shlex.quote(vps.id)} {_apply_script()}",
             timeout=120,
         )
     finally:
@@ -96,7 +98,7 @@ def _record_sync_error(db: Session, vps_id: str, message: str) -> None:
         row = db.get(Vps, vps_id)
         if row is None:
             return
-        row.last_error = message
+        update_status(db, vps_id, sync_error=message[:400])
         db.commit()
     except Exception:
         db.rollback()
@@ -118,12 +120,13 @@ def sync_replicas() -> None:
                 return
             snapshot = settings.sqlite_path.parent / "replica-snapshot.db"
             backup_sqlite(snapshot)
+            with closing(sqlite3.connect(snapshot)) as snapshot_db:
+                version = acl_version(snapshot_db.execute)
             for row in rows:
                 try:
                     push_replica(row, snapshot)
-                    if row.last_error:
-                        row.last_error = ""
-                        db.commit()
+                    update_status(db, row.id, applied_version=version, applied_at=now_local(), sync_error=None)
+                    db.commit()
                     logger.info("已同步备机 %s", row.id)
                 except Exception as exc:
                     logger.exception("同步备机失败：%s", row.id)
