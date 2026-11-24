@@ -71,14 +71,10 @@ export function RulesPage() {
     setBusy(true)
     setError('')
     try {
-      const created = await api.createClashRule(newLine.trim())
-      setRules((prev) => {
-        const matchIndex = prev.findIndex((item) => item.line.toUpperCase().startsWith('MATCH,'))
-        if (matchIndex === -1) return [...prev, created]
-        return [...prev.slice(0, matchIndex), created, ...prev.slice(matchIndex)]
-      })
+      await api.createClashRule(newLine.trim())
       setNewLine('')
       notify('规则已添加')
+      await api.clashRules().then(setRules).catch(() => setError('规则已添加，刷新列表失败'))
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败')
     } finally {
