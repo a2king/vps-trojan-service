@@ -219,6 +219,7 @@ from datetime import datetime
 db_path, domain = sys.argv[1:]
 conn = sqlite3.connect(db_path)
 try:
+    conn.execute("UPDATE vps SET ssh_host=id, replica=1 WHERE is_local=1 AND ssh_host IN ('127.0.0.1', 'localhost', '')")
     conn.execute("UPDATE vps SET is_local=0")
     row = conn.execute("SELECT id FROM vps WHERE id=?", (domain,)).fetchone()
     if row is None:

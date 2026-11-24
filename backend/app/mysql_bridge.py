@@ -6,6 +6,7 @@ from mysql_mimic import MysqlServer, Session
 from sqlalchemy import text
 
 from app.config import get_settings
+from app.services.node_traffic import record_traffic, usage_for_account
 from app.database import engine
 
 logger = logging.getLogger("trojan-admin")
@@ -115,13 +116,20 @@ def handle_trojan_sql(sql: str, mysql_user: str = "") -> tuple[list, list[str]]:
             return [], ["quota", "download + upload"]
         with engine.begin() as conn:
             row = conn.execute(
-                text("SELECT quota, download + upload FROM users WHERE password = :password"),
+                text(
+                    "SELECT users.quota, users.download + users.upload, accounts.telemetry_key "
+                    "FROM users LEFT JOIN accounts ON accounts.password_sha224 = users.password "
+                    "WHERE users.password = :password"
+                ),
                 {"password": password},
             ).first()
         if row is None:
             _log_auth_deny(AUTH_MISSING_HASH, password, vps_id)
             return [], ["quota", "download + upload"]
-        return [(int(row[0]), int(row[1]))], ["quota", "download + upload"]
+        quota, usage, account_key = row
+        if quota > 0 and account_key:
+            usage += usage_for_account(account_key)
+        return [(int(quota), int(usage))], ["quota", "download + upload"]
 
     matched = UPDATE_RE.search(statement)
     if matched:
@@ -129,13 +137,12 @@ def handle_trojan_sql(sql: str, mysql_user: str = "") -> tuple[list, list[str]]:
         upload = int(matched.group(2))
         password = matched.group(3)
         with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "UPDATE users SET download = download + :download, upload = upload + :upload "
-                    "WHERE password = :password"
-                ),
-                {"download": download, "upload": upload, "password": password},
-            )
+            account_key = conn.execute(
+                text("SELECT telemetry_key FROM accounts WHERE password_sha224 = :password"),
+                {"password": password},
+            ).scalar_one_or_none()
+        if account_key:
+            record_traffic(vps_id or settings.domain, account_key, download, upload)
         return [], []
 
     logger.debug("忽略 Trojan MySQL 语句: %s", statement[:200])

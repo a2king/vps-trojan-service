@@ -61,7 +61,7 @@ def read_rules(q: str = "", db: Session = Depends(get_db)) -> list[ClashRuleOut]
 
 @router.post("/rules", response_model=ClashRuleOut, status_code=status.HTTP_201_CREATED)
 def create_rule(body: ClashRuleCreate, db: Session = Depends(get_db)) -> ClashRuleOut:
-    created = add_rules(db, [body.line], before_match=True)
+    created = add_rules(db, [body.line])
     if not created:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="规则已存在或格式无效")
     push_replicas_after_acl_commit()
@@ -160,6 +160,6 @@ def confirm_import(body: ClashImportConfirm, db: Session = Depends(get_db)) -> l
         lines = imported
     if not lines:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可添加的规则")
-    created = add_rules(db, lines, before_match=True)
+    created = add_rules(db, lines)
     push_replicas_after_acl_commit()
     return [_to_out(row) for row in created]

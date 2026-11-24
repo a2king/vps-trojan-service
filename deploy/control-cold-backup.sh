@@ -59,17 +59,6 @@ chmod 700 "$LOCAL_ROOT" "$outdir"
 ha_blue "生成完整冷备包 ${outdir}"
 ha_sqlite_backup "$DB_PATH" "${outdir}/trojan.db"
 
-if [[ -d "$SSH_DIR" ]]; then
-  mkdir -p "${outdir}/backend/data/ssh"
-  chmod 700 "${outdir}/backend" "${outdir}/backend/data" "${outdir}/backend/data/ssh"
-  for key in id_ed25519 id_ed25519.pub; do
-    if [[ -f "${SSH_DIR}/${key}" ]]; then
-      cp -a "${SSH_DIR}/${key}" "${outdir}/backend/data/ssh/"
-    fi
-  done
-  [[ -f "${outdir}/backend/data/ssh/id_ed25519" ]] && chmod 600 "${outdir}/backend/data/ssh/id_ed25519"
-  [[ -f "${outdir}/backend/data/ssh/id_ed25519.pub" ]] && chmod 644 "${outdir}/backend/data/ssh/id_ed25519.pub"
-fi
 if [[ -f "$ENV_FILE" ]]; then
   cp -a "$ENV_FILE" "${outdir}/.env"
   chmod 600 "${outdir}/.env"
@@ -84,12 +73,11 @@ chmod 600 "${outdir}/trojan.db" "${outdir}/TIMESTAMP"
 cat >"${outdir}/RESTORE.md" <<'EOF'
 # Trojan 管控完整冷备恢复
 
-本目录包含 SQLite 数据库、管控 SSH 密钥、安装根 `.env` 和可选 `ha.env`。
+本目录包含 SQLite 数据库、安装根 `.env` 和可选 `ha.env`。
 账号、规则、隧道及节点关系都在 `trojan.db` 中。
 
 从零恢复：完成同版本安装后停止 `trojan-admin`，将 `.env` 放回安装根；将
-`trojan.db` 放到 `backend/data/trojan.db`（权限 600），将 `backend/data/ssh/`
-放回对应目录（目录 700、私钥 600）；若有 `ha.env`，复制到
+`trojan.db` 放到 `backend/data/trojan.db`（权限 600），重新登记节点 SSH 公钥；若有 `ha.env`，复制到
 `/etc/trojan-admin/ha.env`（权限 600），检查 `INSTALL_DIR` 和 `CONTROL_ROLE`，
 然后执行 `systemctl daemon-reload && systemctl enable --now trojan-admin`。
 不要让两台机器同时以 `primary` 写库。

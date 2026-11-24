@@ -83,16 +83,6 @@ if [[ "$USE_INCOMING" -eq 1 ]]; then
   # 去掉可能残留的 WAL，避免旧会话文件干扰
   rm -f "${DB_PATH}-wal" "${DB_PATH}-shm"
 
-  if [[ -d "${HA_INCOMING}/ssh" ]]; then
-    mkdir -p "$SSH_DIR"
-    if [[ -f "${HA_INCOMING}/ssh/id_ed25519" ]]; then
-      cp -a "${HA_INCOMING}/ssh/id_ed25519" "${SSH_DIR}/"
-      chmod 600 "${SSH_DIR}/id_ed25519"
-    fi
-    if [[ -f "${HA_INCOMING}/ssh/id_ed25519.pub" ]]; then
-      cp -a "${HA_INCOMING}/ssh/id_ed25519.pub" "${SSH_DIR}/"
-    fi
-  fi
 fi
 
 # 主备快照来自旧主，promote 后由部署脚本把当前机器标回本机，避免沿用旧主 is_local。

@@ -8,6 +8,8 @@ export type User = {
   remark: string
   created_at: string
   last_seen_at: string | null
+  last_auth_at: string | null
+  last_traffic_at: string | null
   total_download: number
   total_upload: number
   today_download: number
@@ -35,8 +37,24 @@ export type TrafficPoint = {
 
 export type UserIp = {
   ip: string
+  node_id: string | null
+  first_seen_at: string | null
   last_seen_at: string
 }
+
+export type NodeObservation = {
+  node_id: string
+  traffic_at: string | null
+  traffic_error: string | null
+  ips_at: string | null
+  ips_error: string | null
+  applied_at: string | null
+  applied_version: string | null
+  sync_error: string | null
+  current: boolean
+}
+
+export type AuditEvent = { at: string; actor: string; event: string }
 
 export type ClashRule = {
   id: number
@@ -234,6 +252,11 @@ export const api = {
     request<VpsNode>(`/api/vps/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteVps: (id: string) => request<void>(`/api/vps/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   vpsLogs: (id: string) => request<VpsLog>(`/api/vps/${encodeURIComponent(id)}/logs`),
+  prepareStandby: (id: string) => request<void>(`/api/vps/${encodeURIComponent(id)}/prepare-standby`, { method: 'POST' }),
+  observations: () => request<{ version: string; nodes: NodeObservation[] }>('/api/observations'),
+  runtimeLogs: (id: string, source: string) =>
+    request<{ lines: string[] }>(`/api/observations/runtime-log/${encodeURIComponent(id)}?source=${source}`),
+  audit: () => request<AuditEvent[]>('/api/observations/audit'),
   redeployVps: (id: string, sshPassword?: string) =>
     request<VpsNode>(`/api/vps/${encodeURIComponent(id)}/redeploy`, {
       method: 'POST',
@@ -255,8 +278,8 @@ export const api = {
       body: JSON.stringify({ password: password || null }),
     }),
   deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
-  traffic: (id: number, granularity: 'day' | 'month') =>
-    request<TrafficPoint[]>(`/api/users/${id}/traffic?granularity=${granularity}`),
+  traffic: (id: number, granularity: 'day' | 'month', node = '') =>
+    request<TrafficPoint[]>(`/api/users/${id}/traffic?${new URLSearchParams({ granularity, ...(node ? { node_id: node } : {}) })}`),
   userIps: (id: number) => request<UserIp[]>(`/api/users/${id}/ips`),
   clashSettings: () => request<{ settings: ClashSettings }>('/api/clash/settings'),
   saveClashSettings: (settings: ClashSettings) =>

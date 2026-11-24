@@ -9,7 +9,7 @@ from app.models import Admin, Vps
 from app.schemas import VpsCreate, VpsLogOut, VpsOut, VpsPromotePrimaryOut, VpsRedeploy, VpsUpdate
 from app.services import install_logs, node_install, ssh
 from app.services.control_lock import is_switch_in_progress
-from app.services.primary_switch import promote_primary
+from app.services.primary_switch import prepare_standby, promote_primary
 from app.services.nodes import (
     bind_vps_to_existing_groups,
     get_vps,
@@ -135,6 +135,20 @@ def redeploy_node(vps_id: str, body: VpsRedeploy | None = None, db: Session = De
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     push_replicas_after_acl_commit()
     return _out(row)
+
+
+@router.post("/{vps_id}/prepare-standby", status_code=status.HTTP_204_NO_CONTENT)
+def prepare_node(vps_id: str, db: Session = Depends(get_db)) -> Response:
+    row = get_vps(db, vps_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="节点不存在")
+    try:
+        prepare_standby(row)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="备机管理密钥准备失败") from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{vps_id}/promote-primary", response_model=VpsPromotePrimaryOut, status_code=status.HTTP_202_ACCEPTED)

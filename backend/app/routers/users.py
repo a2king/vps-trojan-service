@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,10 +10,10 @@ from app.models import Account, AccountGroupTunnel, AccountGroupVps, AccountIp, 
 from app.schemas import Overview, PasswordReset, TrafficPoint, UserCreate, UserIpOut, UserNodesUpdate, UserOut, UserUpdate
 from app.security import generate_password, sha224_hex
 from app.services import get_trojan_user, set_trojan_enabled, to_user_out
-from app.services.ips import list_account_ips
+from app.services.ips import list_account_ips, remember_auth_prefix
 from app.services.nodes import assign_default_nodes, replace_group_nodes
 from app.services.replica_sync import push_replicas_after_acl_commit
-from app.services.traffic import collect_traffic, daily_map, month_start, month_totals, overview_stats, series_daily, series_monthly
+from app.services.traffic import month_start, overview_stats, recent_activity, series_daily, series_monthly, usage_totals
 from app.timeutil import now_local, to_iso
 
 router = APIRouter(prefix="/api", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -21,22 +21,25 @@ router = APIRouter(prefix="/api", tags=["admin"], dependencies=[Depends(get_curr
 
 def _stats_for_accounts(db: Session, accounts: list[Account]) -> list[UserOut]:
     today = now_local().date()
-    today_rows = daily_map(db, today)
-    month_rows = month_totals(db, month_start(today))
+    today_rows = usage_totals(db, today, today)
+    month_rows = usage_totals(db, month_start(today), today)
+    auth, totals, _ = recent_activity(db)
     users = {u.password: u for u in db.execute(select(TrojanUser)).scalars().all()}
     result = []
     for account in accounts:
-        today_row = today_rows.get(account.id)
+        today_row = today_rows.get(account.id, (0, 0))
         month = month_rows.get(account.id, (0, 0))
         result.append(
             to_user_out(
                 account,
                 users.get(account.password_sha224),
-                today_download=int(today_row.download_bytes) if today_row else 0,
-                today_upload=int(today_row.upload_bytes) if today_row else 0,
+                today_download=today_row[0],
+                today_upload=today_row[1],
                 month_download=month[0],
                 month_upload=month[1],
                 db=db,
+                telemetry=totals.get(account.telemetry_key, (0, 0, None)),
+                auth_at=auth.get(account.id),
             )
         )
     return result
@@ -51,13 +54,11 @@ def _get_account(db: Session, user_id: int) -> Account:
 
 @router.get("/overview", response_model=Overview)
 def overview(_: Admin = Depends(get_current_admin), db: Session = Depends(get_db)) -> Overview:
-    collect_traffic(db)
     return Overview(**overview_stats(db))
 
 
 @router.get("/users", response_model=list[UserOut])
 def list_users(db: Session = Depends(get_db)) -> list[UserOut]:
-    collect_traffic(db)
     accounts = db.execute(select(Account).order_by(Account.id.desc())).scalars().all()
     return _stats_for_accounts(db, accounts)
 
@@ -81,6 +82,7 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)) -> UserOut:
     )
     db.add(account)
     db.flush()
+    remember_auth_prefix(db, account)
     db.add(
         TrojanUser(
             username=name,
@@ -107,13 +109,12 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)) -> UserOut:
 
 @router.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
-    collect_traffic(db)
     account = _get_account(db, user_id)
     return _stats_for_accounts(db, [account])[0]
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
-def update_user(user_id: int, body: UserUpdate, db: Session = Depends(get_db)) -> UserOut:
+def update_user(user_id: int, body: UserUpdate, request: Request, db: Session = Depends(get_db)) -> UserOut:
     account = _get_account(db, user_id)
     trojan = get_trojan_user(db, account.password_sha224)
     if body.name is not None:
@@ -129,6 +130,7 @@ def update_user(user_id: int, body: UserUpdate, db: Session = Depends(get_db)) -
     if body.remark is not None:
         account.remark = body.remark.strip()
     if body.enabled is not None:
+        request.state.audit_action = "启用账号" if body.enabled else "禁用账号"
         account.enabled = 1 if body.enabled else 0
         if trojan is not None:
             set_trojan_enabled(trojan, body.enabled)
@@ -148,8 +150,10 @@ def reset_password(user_id: int, body: PasswordReset, db: Session = Depends(get_
     ).scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="密码已被占用，请换一个")
     trojan = get_trojan_user(db, account.password_sha224)
+    remember_auth_prefix(db, account)
     account.password = password
     account.password_sha224 = digest
+    remember_auth_prefix(db, account)
     if trojan is not None:
         trojan.password = digest
         trojan.username = account.name
@@ -180,9 +184,11 @@ def user_traffic(
     user_id: int,
     granularity: Literal["day", "month"] = "day",
     db: Session = Depends(get_db),
+    node_id: str | None = None,
 ) -> list[TrafficPoint]:
     _get_account(db, user_id)
-    raw = series_daily(db, user_id) if granularity == "day" else series_monthly(db, user_id)
+    series = series_daily if granularity == "day" else series_monthly
+    raw = series(db, user_id, node_id=node_id)
     return [TrafficPoint(**item) for item in raw]
 
 
@@ -191,7 +197,10 @@ def user_ips(user_id: int, db: Session = Depends(get_db)) -> list[UserIpOut]:
     _get_account(db, user_id)
     rows = list_account_ips(db, user_id)
     return [
-        UserIpOut(ip=row.ip, last_seen_at=to_iso(row.last_seen_at) or "")
+        UserIpOut(
+            ip=row["ip"], node_id=row["node_id"], first_seen_at=to_iso(row["first_seen_at"]),
+            last_seen_at=to_iso(row["last_seen_at"]) or "",
+        )
         for row in rows
     ]
 

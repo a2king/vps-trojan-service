@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import hashlib
 import os
 from pathlib import Path
 import shlex
@@ -9,6 +10,7 @@ import tempfile
 from shutil import which
 
 from app.config import get_settings
+from app.database import SessionLocal
 from app.models import Vps
 from app.paths import repo_root
 from app.services import ssh
@@ -65,7 +67,8 @@ def _ha_env_for_target(target: Vps, incoming: str) -> tuple[dict[str, str], Path
         f"STANDBY_PORT={int(target.ssh_port or 22)}",
         f"STANDBY_USER={target.ssh_user or 'root'}",
         f"HA_INCOMING={incoming}",
-        f"STANDBY_SSH_KEY={ssh.private_key_path()}",
+        f"STANDBY_SSH_KEY={ssh.node_private_key_path(target.id)}",
+        f"STANDBY_KNOWN_HOSTS={ssh.known_hosts_path()}",
     ]
     handle = tempfile.NamedTemporaryFile(
         mode="w",
@@ -156,11 +159,59 @@ def _remote_apply_only(client, install_dir: str, incoming: str) -> None:
         [
             _remote_env_file(install_dir, incoming),
             f"test -f {shlex.quote(incoming)}/trojan.db",
-            f"test -f {shlex.quote(incoming)}/ssh/id_ed25519",
             f"HA_ENV=/var/lib/trojan-admin/primary-switch.env bash {shlex.quote(install_dir)}/deploy/control-promote.sh --apply-only",
         ]
     )
     ssh.run(client, command, timeout=180)
+
+
+def prepare_management(client, target: Vps, install_dir: str) -> None:
+    """Authorize the chosen controller's own public keys on its future peers."""
+    directory = f"{install_dir}/backend/data/ssh"
+    known_hosts = f"{directory}/known_hosts"
+    with SessionLocal() as db:
+        peers = db.query(Vps).filter(Vps.id != target.id, Vps.status == "online").all()
+    for peer in peers:
+        key_path = f"{directory}/nodes/{hashlib.sha256(peer.id.encode()).hexdigest()}"
+        command = (
+            f"umask 077; mkdir -p {shlex.quote(directory + '/nodes')}; "
+            f"test -s {shlex.quote(key_path)} || ssh-keygen -q -t ed25519 -N '' -f {shlex.quote(key_path)}; "
+            f"ssh-keygen -y -f {shlex.quote(key_path)}"
+        )
+        public_key = ssh.run(client, command).strip()
+        if peer.is_local:
+            host = peer.id
+            host_keys = list(Path("/etc/ssh").glob("ssh_host_*_key.pub"))
+            if not host_keys:
+                raise RuntimeError("找不到旧主 SSH 主机公钥")
+            host_records = [f"{host} {' '.join(path.read_text().split()[:2])}" for path in host_keys]
+            ssh.authorize_local(public_key)
+        else:
+            peer_connection = ssh.connect_node(peer)
+            try:
+                server_key = peer_connection.get_transport().get_remote_server_key()
+                port = int(peer.ssh_port or 22)
+                host = peer.ssh_host if port == 22 else f"[{peer.ssh_host}]:{port}"
+                host_records = [f"{host} {server_key.get_name()} {server_key.get_base64()}"]
+                ssh.install_authorized_key(peer_connection, public_key)
+            finally:
+                peer_connection.close()
+        for record in host_records:
+            quoted = shlex.quote(record)
+            known = shlex.quote(known_hosts)
+            ssh.run(client, f"umask 077; touch {known}; grep -Fqx {quoted} {known} || printf '%s\\n' {quoted} >> {known}")
+
+
+def prepare_standby(target: Vps) -> None:
+    if not settings.is_control_primary or target.is_local or not target.replica or target.status != "online":
+        raise RuntimeError("请选择在线的完整备控")
+    with primary_switch_lock():
+        client = ssh.connect_node(target)
+        try:
+            remote = _check_standby(client)
+            prepare_management(client, target, remote["INSTALL_DIR"])
+        finally:
+            client.close()
 
 
 def _remote_promote_watcher(client, install_dir: str, old_domain: str) -> str:
@@ -235,9 +286,9 @@ def promote_primary(target: Vps) -> dict[str, str]:
         client = None
         env_path: Path | None = None
         try:
-            ssh.ensure_host_key()
-            client = ssh.connect(target.ssh_host, int(target.ssh_port or 22), target.ssh_user or "root")
+            client = ssh.connect_node(target)
             remote = _check_standby(client)
+            prepare_management(client, target, remote["INSTALL_DIR"])
             env, env_path = _ha_env_for_target(target, remote["HA_INCOMING"])
             _run_local(_script("control-sync.sh"), env=env)
             _remote_apply_only(client, remote["INSTALL_DIR"], remote["HA_INCOMING"])

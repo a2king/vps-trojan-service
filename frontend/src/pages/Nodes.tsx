@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type UIEvent } from 'react'
-import type { VpsNode } from '../api'
+import type { AuditEvent, NodeObservation, VpsNode } from '../api'
 import { api } from '../api'
 import { formatDateTime } from '../lib/format'
 
@@ -12,10 +12,13 @@ function statusLabel(status: string): string {
 
 export function NodesPage() {
   const [nodes, setNodes] = useState<VpsNode[]>([])
+  const [observation, setObservation] = useState<{ version: string; nodes: NodeObservation[] } | null>(null)
+  const [audit, setAudit] = useState<AuditEvent[] | null>(null)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [busy, setBusy] = useState(false)
   const [promotingId, setPromotingId] = useState<string | null>(null)
+  const [preparingId, setPreparingId] = useState<string | null>(null)
   const [domain, setDomain] = useState('')
   const [name, setName] = useState('')
   const [sshHost, setSshHost] = useState('')
@@ -26,6 +29,9 @@ export function NodesPage() {
   const [logNode, setLogNode] = useState<VpsNode | null>(null)
   const [logText, setLogText] = useState('')
   const [logStatus, setLogStatus] = useState('')
+  const [logSource, setLogSource] = useState('install')
+  const [logFilter, setLogFilter] = useState('')
+  const [logError, setLogError] = useState('')
   const logRef = useRef<HTMLPreElement>(null)
   const stickToBottom = useRef(true)
 
@@ -44,6 +50,10 @@ export function NodesPage() {
     refresh().catch((err: unknown) => {
       setError(err instanceof Error ? err.message : '加载失败')
     })
+    const loadObservation = () => api.observations().then(setObservation).catch(() => setObservation(null))
+    void loadObservation()
+    const timer = window.setInterval(loadObservation, 15000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -65,25 +75,55 @@ export function NodesPage() {
   useEffect(() => {
     if (!logNode) return undefined
     let cancelled = false
+    let timer: number | undefined
+    setLogText('')
+    setLogError('')
     async function load() {
       if (!logNode) return
       try {
-        const data = await api.vpsLogs(logNode.id)
-        if (cancelled) return
-        setLogText(data.log)
-        setLogStatus(data.status)
-        setNodes((prev) => prev.map((item) => (item.id === data.id ? { ...item, status: data.status } : item)))
-      } catch {
-        return
+        if (logSource === 'install') {
+          const data = await api.vpsLogs(logNode.id)
+          if (cancelled) return
+          setLogText(data.log)
+          setLogStatus(data.status)
+          setNodes((prev) => prev.map((item) => (item.id === data.id ? { ...item, status: data.status } : item)))
+        } else {
+          const data = await api.runtimeLogs(logNode.id, logSource)
+          if (cancelled) return
+          setLogText(data.lines.join('\n'))
+        }
+        setLogError('')
+      } catch (err) {
+        if (!cancelled) setLogError(err instanceof Error ? err.message : '读取日志失败')
+      } finally {
+        if (!cancelled) timer = window.setTimeout(load, logSource === 'install' ? 3000 : 10000)
       }
     }
     load()
-    const timer = window.setInterval(load, 1500)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      window.clearTimeout(timer)
     }
-  }, [logNode])
+  }, [logNode, logSource])
+
+  function openLogs(node: VpsNode) {
+    setLogStatus('')
+    setLogFilter('')
+    setLogSource(node.is_local ? 'trojan' : 'install')
+    setLogNode(node)
+  }
+
+  async function prepareStandby(node: VpsNode) {
+    setPreparingId(node.id)
+    try {
+      await api.prepareStandby(node.id)
+      notify('备机接管密钥已准备')
+    } catch (err) {
+      notify(err instanceof Error ? err.message : '准备接管密钥失败')
+    } finally {
+      setPreparingId(null)
+    }
+  }
 
   async function onCreate(event: FormEvent) {
     event.preventDefault()
@@ -246,11 +286,14 @@ export function NodesPage() {
                     <th>类型</th>
                     <th>状态</th>
                     <th>创建时间</th>
+                    <th>采集与权限</th>
                     <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {nodes.map((item) => (
+                  {nodes.map((item) => {
+                    const state = observation?.nodes.find((entry) => entry.node_id === item.id)
+                    return (
                     <tr key={item.id} className="rule-row">
                       <td className="num">{item.id}</td>
                       <td>
@@ -280,12 +323,21 @@ export function NodesPage() {
                       </td>
                       <td>{item.created_at ? formatDateTime(item.created_at) : '—'}</td>
                       <td>
+                        <div title={state?.traffic_error ?? ''}>流量 {state?.traffic_at ? formatDateTime(state.traffic_at) : '待采集'}{state?.traffic_error ? ' · 读取失败' : ''}</div>
+                        <div title={state?.ips_error ?? ''}>IP {state?.ips_at ? formatDateTime(state.ips_at) : '待采集'}{state?.ips_error ? ' · 读取失败' : ''}</div>
+                        <div title={state?.sync_error ?? ''}>权限 {state?.current ? '已同步' : state?.sync_error ? '同步失败' : '待确认'} {state?.applied_version}</div>
+                        {state?.applied_at ? <small>{formatDateTime(state.applied_at)}</small> : null}
+                      </td>
+                      <td>
                         <div className="rule-actions">
+                          <button className="btn ghost" type="button" onClick={() => openLogs(item)}>日志</button>
                           {item.is_local ? null : (
                             <>
-                              <button className="btn ghost" type="button" onClick={() => setLogNode(item)}>
-                                日志
-                              </button>
+                              {item.replica ? (
+                                <button className="btn ghost" type="button" disabled={item.status !== 'online' || preparingId !== null || promotingId !== null} onClick={() => prepareStandby(item)}>
+                                  {preparingId === item.id ? '准备中…' : '准备接管密钥'}
+                                </button>
+                              ) : null}
                               <button
                                 className="btn ghost"
                                 type="button"
@@ -297,7 +349,7 @@ export function NodesPage() {
                               <button
                                 className="btn primary"
                                 type="button"
-                                disabled={busy || promotingId !== null || item.status !== 'online' || !item.replica}
+                                disabled={busy || promotingId !== null || preparingId !== null || item.status !== 'online' || !item.replica}
                                 title={item.replica ? '按 HA 顺序切换主节点' : '该节点不是完整备控'}
                                 onClick={() => promotePrimary(item)}
                               >
@@ -316,11 +368,27 @@ export function NodesPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
           )}
+        </section>
+        <section className="panel">
+          <div className="panel-head">
+            <h2>管理审计</h2>
+            <button className="btn" type="button" onClick={() => api.audit().then(setAudit).catch((err: Error) => notify(err.message))}>查看近期记录</button>
+          </div>
+          {audit ? (
+            <div className="table-wrap">
+              <table className="users">
+                <thead><tr><th>时间</th><th>管理员</th><th>操作</th></tr></thead>
+                <tbody>{audit.map((item, index) => <tr key={index}><td>{formatDateTime(item.at)}</td><td>{item.actor}</td><td>{item.event}</td></tr>)}</tbody>
+              </table>
+              {audit.length === 0 ? <div className="empty">暂无管理操作</div> : null}
+            </div>
+          ) : null}
         </section>
       </main>
 
@@ -334,11 +402,24 @@ export function NodesPage() {
               </button>
             </div>
             <div className="import-body">
+              <label className="field">
+                <span>日志来源</span>
+                <select value={logSource} onChange={(event) => setLogSource(event.target.value)}>
+                  {!logNode.is_local ? <option value="install">安装</option> : null}
+                  <option value="trojan">Trojan 运行</option>
+                  <option value="admin">管理后台</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>筛选日志</span>
+                <input value={logFilter} placeholder="时间 / 级别 / 关键字" onChange={(event) => setLogFilter(event.target.value)} />
+              </label>
+              {logError ? <p className="error">{logError}</p> : null}
               {logNode.last_error && (logStatus || logNode.status) === 'error' ? (
                 <p className="error">{logNode.last_error}</p>
               ) : null}
               <pre ref={logRef} className="install-log" onScroll={onLogScroll}>
-                {logText || '暂无日志'}
+                {logText.split('\n').filter((line) => line.toLowerCase().includes(logFilter.trim().toLowerCase())).join('\n') || '暂无匹配日志'}
               </pre>
             </div>
           </div>

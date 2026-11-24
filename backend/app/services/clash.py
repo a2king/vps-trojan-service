@@ -159,7 +159,9 @@ def seed_clash(db: Session) -> None:
     db.commit()
 
 
-def add_rules(db: Session, lines: list[str], *, before_match: bool = True) -> list[ClashRule]:
+def add_rules(db: Session, lines: list[str]) -> list[ClashRule]:
+    # Lock writes before reading the current order so parallel edits cannot reuse it.
+    db.connection().exec_driver_sql("BEGIN IMMEDIATE")
     current = list_rules(db)
     existing = {rule.line for rule in current}
     incoming: list[str] = []
@@ -171,18 +173,21 @@ def add_rules(db: Session, lines: list[str], *, before_match: bool = True) -> li
         seen.add(line)
         incoming.append(line)
     if not incoming:
+        db.rollback()
         return []
 
-    insert_at = match_insert_index(current) if before_match else len(current)
-    created: list[ClashRule] = []
-    for line in incoming:
-        row = ClashRule(line=line, sort_order=0)
-        db.add(row)
-        db.flush()
-        created.append(row)
-        current.insert(insert_at, row)
-        insert_at += 1
-    for index, rule in enumerate(current, start=1):
+    created = [ClashRule(line=line) for line in incoming]
+    db.add_all(created)
+    priority_rules: list[ClashRule] = []
+    fallback_rules: list[ClashRule] = []
+    for rule in created:
+        if rule.line.upper().startswith("MATCH,"):
+            fallback_rules.append(rule)
+        else:
+            priority_rules.append(rule)
+    fallback_index = match_insert_index(current)
+    current[fallback_index:fallback_index] = fallback_rules
+    for index, rule in enumerate(priority_rules + current, start=1):
         rule.sort_order = index * 10
     _ensure_groups_for_policies(db, incoming)
     db.commit()
@@ -218,6 +223,7 @@ def delete_rule(db: Session, rule_id: int) -> None:
 
 
 def reorder_rules(db: Session, ids: list[int]) -> list[ClashRule]:
+    db.connection().exec_driver_sql("BEGIN IMMEDIATE")
     rows = {rule.id: rule for rule in list_rules(db)}
     if set(ids) != set(rows):
         raise ValueError("排序列表与现有规则不一致")

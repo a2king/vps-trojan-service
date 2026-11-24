@@ -38,6 +38,8 @@ class TrafficPoint(BaseModel):
 class UserIpOut(BaseModel):
     ip: str
     last_seen_at: str
+    node_id: str | None = None
+    first_seen_at: str | None = None
 
 
 class UserOut(BaseModel):
@@ -50,6 +52,8 @@ class UserOut(BaseModel):
     remark: str
     created_at: str
     last_seen_at: str | None
+    last_auth_at: str | None = None
+    last_traffic_at: str | None = None
     total_download: int
     total_upload: int
     today_download: int

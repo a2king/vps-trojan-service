@@ -1,28 +1,31 @@
 from contextlib import asynccontextmanager
+from hashlib import sha256
 import logging
 import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select, text
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
-from app.models import Account, AccountGroupTunnel, AccountGroupVps, AccountIp, Admin, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser, TunnelProxy, Vps  # noqa: F401
+from app.models import Account, AccountGroupTunnel, AccountGroupVps, AccountIp, Admin, AdminAuditEvent, ClashRule, ClashSetting, LogCursor, TrafficDaily, TrafficSnapshot, TrojanUser, TunnelProxy, Vps  # noqa: F401
 from app.mysql_bridge import create_mysql_server
-from app.routers import auth, clash, subscribe, system, tunnels, users, vps
-from app.security import hash_admin_password
+from app.routers import auth, clash, observations, subscribe, system, tunnels, users, vps
+from app.security import decode_access_token, hash_admin_password
 from app.services.clash import seed_clash
 from app.services.node_install import start_online_tunnels
 from app.services.cold_backup import job_cold_backup
 from app.services.control_lock import clear_switch_marker, is_switch_in_progress
 from app.services.nodes import seed_local_vps
 from app.services.replica_sync import sync_replicas
-from app.services.ips import ingest_trojan_ips
+from app.services.ips import ingest_trojan_ips, remember_auth_prefix
 from app.services.ssh import stop_all_tunnels
-from app.services.traffic import collect_traffic
+from app.services.observation import collect_node_traffic
+from app.services.node_traffic import init_node_traffic
 from app.timeutil import now_local
 
 settings = get_settings()
@@ -35,9 +38,27 @@ def _migrate(db) -> None:
     if names and "replica" not in names:
         db.execute(text("ALTER TABLE vps ADD COLUMN replica INTEGER NOT NULL DEFAULT 0"))
         db.commit()
+    names = {row[1] for row in db.execute(text("PRAGMA table_info(accounts)"))}
+    if "telemetry_key" not in names:
+        db.execute(text("ALTER TABLE accounts ADD COLUMN telemetry_key VARCHAR(32) NOT NULL DEFAULT ''"))
+        accounts = db.execute(text("SELECT id, created_at FROM accounts")).all()
+        for account_id, created_at in accounts:
+            key = sha256(f"legacy:{account_id}:{created_at}".encode()).hexdigest()[:32]
+            db.execute(text("UPDATE accounts SET telemetry_key=:key WHERE id=:id"), {"key": key, "id": account_id})
+        if settings.is_control_primary:
+            from app.services.traffic import finalize_legacy_traffic
+
+            finalize_legacy_traffic(db)
+        else:
+            db.commit()
+    names = {row[1] for row in db.execute(text("PRAGMA table_info(log_cursors)"))}
+    if "anchor" not in names:
+        db.execute(text("ALTER TABLE log_cursors ADD COLUMN anchor VARCHAR(16) NOT NULL DEFAULT ''"))
+        db.commit()
 
 
 def init_db() -> None:
+    init_node_traffic()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -54,6 +75,9 @@ def init_db() -> None:
         else:
             admin.password_hash = hash_admin_password(settings.admin_password)
         db.commit()
+        for account in db.scalars(select(Account)):
+            remember_auth_prefix(db, account)
+        db.commit()
         seed_clash(db)
         seed_local_vps(db)
         if settings.is_control_primary:
@@ -66,14 +90,10 @@ def job_traffic() -> None:
     if is_switch_in_progress():
         logger.info("主节点切换进行中，跳过流量采集")
         return
-    db = SessionLocal()
     try:
-        collect_traffic(db)
+        collect_node_traffic()
     except Exception:
         logger.exception("流量采集失败")
-        db.rollback()
-    finally:
-        db.close()
 
 
 def job_sync_replicas() -> None:
@@ -196,6 +216,30 @@ async def standby_write_guard(request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def audit_admin_changes(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"} or response.status_code >= 300:
+        return response
+    if not path.startswith(("/api/users", "/api/vps", "/api/tunnels", "/api/clash")) or path.endswith("/preview"):
+        return response
+    authorization = request.headers.get("Authorization", "")
+    actor = decode_access_token(authorization[7:]) if authorization.lower().startswith("bearer ") else None
+    if actor:
+        try:
+            action = getattr(request.state, "audit_action", request.method)
+            await run_in_threadpool(_save_audit, actor, f"{action} {path}")
+        except Exception:
+            logger.exception("写入管理审计失败")
+    return response
+
+
+def _save_audit(actor: str, event: str) -> None:
+    with SessionLocal.begin() as db:
+        db.add(AdminAuditEvent(occurred_at=now_local(), actor=actor, event=event))
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -206,6 +250,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(vps.router)
+app.include_router(observations.router)
 app.include_router(tunnels.router)
 app.include_router(system.router)
 app.include_router(clash.router)

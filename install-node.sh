@@ -425,7 +425,8 @@ install_trojan_bin() {
 
 setup_log() {
   touch /var/log/trojan.log
-  chmod 644 /var/log/trojan.log
+  chmod 640 /var/log/trojan.log
+  install -m 644 "${INSTALL_DIR}/deploy/logrotate.conf" /etc/logrotate.d/vps-trojan
 }
 
 setup_standby_admin() {
@@ -441,6 +442,9 @@ setup_standby_admin() {
   fi
   mkdir -p "${INSTALL_DIR}/backend/data"
   if [[ -f "${INSTALL_DIR}/seed/trojan.db" ]]; then
+    if systemctl is-active --quiet trojan-admin; then
+      systemctl stop trojan-admin
+    fi
     cp -a "${INSTALL_DIR}/seed/trojan.db" "${INSTALL_DIR}/backend/data/trojan.db"
     chmod 600 "${INSTALL_DIR}/backend/data/trojan.db"
     rm -f "${INSTALL_DIR}/backend/data/trojan.db-wal" "${INSTALL_DIR}/backend/data/trojan.db-shm"
@@ -460,7 +464,7 @@ setup_standby_admin() {
   export INSTALL_DIR NGINX_USER
   render "${INSTALL_DIR}/deploy/trojan-admin.service.tpl" /etc/systemd/system/trojan-admin.service
   touch /var/log/trojan-admin.log
-  chmod 644 /var/log/trojan-admin.log
+  chmod 640 /var/log/trojan-admin.log
   systemctl daemon-reload
 }
 
